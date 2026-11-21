@@ -1,17 +1,23 @@
 <script lang="ts">
-  import { deleteList, findOrCreateList, renameList } from '../../db/lists';
+  import { deleteList, findOrCreateList, listNameKey, renameList } from '../../db/lists';
   import { exportJson, importJson } from '../../db/snapshot';
   import { FileFormatError, NewerSchemaError } from '../../model/file';
+  import type { List } from '../../model/types';
+  import { cleanText } from '../../text/normalize';
+  import { isSubmitEnter } from '../keys';
   import { liveLists } from '../stores';
 
   let newName = $state('');
   let listError = $state('');
   let message = $state('');
   let fileInput: HTMLInputElement | undefined = $state();
+  let listsHeading: HTMLHeadingElement | undefined = $state();
   let adding = false;
 
-  function sameName(a: string, b: string): boolean {
-    return a.toLocaleLowerCase('vi') === b.toLocaleLowerCase('vi');
+  /** The live list already using this name (same rule as findOrCreateList), other than `exceptId`. */
+  function listNamed(name: string, exceptId?: string): List | undefined {
+    const key = listNameKey(name);
+    return ($liveLists ?? []).find((l) => l.id !== exceptId && listNameKey(l.name) === key);
   }
 
   function localDate(d: Date): string {
@@ -20,10 +26,15 @@
   }
 
   async function addList() {
-    const name = newName.trim();
+    const name = cleanText(newName);
     if (!name || adding) return;
-    adding = true;
     listError = '';
+    const existing = listNamed(name);
+    if (existing) {
+      listError = `A list named “${existing.name}” already exists.`;
+      return;
+    }
+    adding = true;
     newName = '';
     try {
       await findOrCreateList(name);
@@ -37,11 +48,12 @@
   }
 
   async function rename(id: string, current: string) {
-    const name = prompt('Rename list', current)?.trim();
+    const name = cleanText(prompt('Rename list', current) ?? '');
     if (!name) return;
     listError = '';
-    if (($liveLists ?? []).some((l) => l.id !== id && sameName(l.name, name))) {
-      listError = `A list named “${name}” already exists.`;
+    const clash = listNamed(name, id);
+    if (clash) {
+      listError = `A list named “${clash.name}” already exists.`;
       return;
     }
     try {
@@ -57,6 +69,8 @@
     listError = '';
     try {
       await deleteList(id);
+      // The focused button's row is gone, so keep focus in this section.
+      listsHeading?.focus();
     } catch (e) {
       console.error(e);
       listError = `Couldn't delete “${name}”.`;
@@ -72,7 +86,8 @@
       a.href = url;
       a.download = `viet-vocab-export-${localDate(new Date())}.json`;
       a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      // iOS Safari reads the URL only after its download prompt is answered.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e) {
       console.error(e);
       message = 'Export failed.';
@@ -82,6 +97,7 @@
   async function doImport(event: Event) {
     const file = (event.currentTarget as HTMLInputElement).files?.[0];
     if (!file) return;
+    message = 'Importing…';
     try {
       const { applied } = await importJson(await file.text());
       message = applied > 0 ? `Updated ${applied} record${applied === 1 ? '' : 's'}.` : 'Nothing new in that file.';
@@ -101,12 +117,14 @@
   <h1>Settings</h1>
 
   <section class="card stack">
-    <h2>Lists</h2>
-    {#if ($liveLists ?? []).length === 0}
+    <h2 tabindex="-1" bind:this={listsHeading}>Lists</h2>
+    {#if $liveLists === undefined}
+      <p class="muted">Loading…</p>
+    {:else if $liveLists.length === 0}
       <p class="muted">No lists yet.</p>
     {:else}
       <ul class="plain-list">
-        {#each $liveLists ?? [] as list (list.id)}
+        {#each $liveLists as list (list.id)}
           <li class="row">
             <span class="name">{list.name}</span>
             <button type="button" aria-label={`Rename ${list.name}`} onclick={() => rename(list.id, list.name)}>Rename</button>
@@ -123,7 +141,7 @@
         placeholder="New list name"
         aria-label="New list name"
         onkeydown={(e) => {
-          if (e.key === 'Enter') {
+          if (isSubmitEnter(e)) {
             e.preventDefault();
             addList();
           }
@@ -147,7 +165,8 @@
         <input class="sr-only" type="file" accept="application/json,.json" bind:this={fileInput} onchange={doImport} />
       </label>
     </div>
-    {#if message}<p class="notice" role="status">{message}</p>{/if}
+    {#if message}<p class="notice" aria-hidden="true">{message}</p>{/if}
+    <p class="sr-only" role="status">{message}</p>
   </section>
 
   <section class="card stack">
