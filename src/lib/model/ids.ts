@@ -12,3 +12,13 @@ export function newId(): string {
 export function nowIso(): string {
   return new Date().toISOString();
 }
+
+/**
+ * Timestamp for an edit to a record last stamped `previous`: now, or 1 ms after `previous` when that
+ * is not in the past (a copy from a device whose clock runs ahead), so a new edit always wins the merge.
+ */
+export function nextTimestamp(previous?: string): string {
+  const now = Date.now();
+  const prev = previous === undefined ? Number.NaN : Date.parse(previous);
+  return new Date(Number.isFinite(prev) && prev >= now ? prev + 1 : now).toISOString();
+}
