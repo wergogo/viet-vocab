@@ -1,5 +1,7 @@
 import { liveQuery } from 'dexie';
 import { readable, type Readable } from 'svelte/store';
+import { db } from '../db/db';
+import type { WordRow } from '../db/derive';
 import { listLiveLists } from '../db/lists';
 import { listLiveWords } from '../db/words';
 
@@ -19,3 +21,8 @@ export const liveWords = liveStore(() => listLiveWords());
 
 /** All live lists in Vietnamese order. */
 export const liveLists = liveStore(() => listLiveLists());
+
+/** One word row by id: undefined while loading, null when it doesn't exist. */
+export function liveWordRow(id: string): Readable<WordRow | null | undefined> {
+  return liveStore(async () => (await db.words.get(id)) ?? null);
+}
