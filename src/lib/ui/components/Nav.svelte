@@ -18,11 +18,11 @@
   <a class="brand" href={href({ name: 'words' })}>Viet Vocab</a>
   <div class="tabs">
     {#each tabs as tab (tab.name)}
-      <a class="tab" class:active={isActive(tab.name)} href={href({ name: tab.name })}>
+      <a class="tab" class:active={isActive(tab.name)} aria-current={isActive(tab.name) ? 'page' : undefined} href={href({ name: tab.name })}>
         <span aria-hidden="true">{tab.icon}</span><span>{tab.label}</span>
       </a>
     {/each}
-    <a class="tab add" class:active={current === 'add'} href={href({ name: 'add', word: '' })}>
+    <a class="tab add" class:active={current === 'add'} aria-current={current === 'add' ? 'page' : undefined} href={href({ name: 'add', word: '' })}>
       <span aria-hidden="true">＋</span><span>Add</span>
     </a>
   </div>

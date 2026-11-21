@@ -6,6 +6,14 @@
   import WordScreen from './lib/ui/screens/WordScreen.svelte';
   import CharScreen from './lib/ui/screens/CharScreen.svelte';
   import SettingsScreen from './lib/ui/screens/SettingsScreen.svelte';
+
+  const TITLES = { words: 'Words', add: 'Add word', edit: 'Edit word', word: 'Word', settings: 'Settings' } as const;
+
+  $effect(() => {
+    const r = $route;
+    const page = r.name === 'char' ? r.char : TITLES[r.name];
+    document.title = r.name === 'words' ? 'Viet Vocab' : `${page} · Viet Vocab`;
+  });
 </script>
 
 <Nav current={$route.name} />
