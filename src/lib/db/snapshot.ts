@@ -5,25 +5,27 @@ import { db } from './db';
 import { fromRow, toRow } from './derive';
 import { markDirty } from './dirty';
 
-/** All local records (derived fields stripped), optionally including tombstones. */
+/** All local records (derived fields stripped), optionally including tombstones, read as one consistent snapshot. */
 export async function readLocalData(includeTombstones: boolean): Promise<VocabData> {
-  const [wordRows, lists, cards, settingsRow] = await Promise.all([
-    db.words.toArray(),
-    db.lists.toArray(),
-    db.cards.toArray(),
-    db.settings.get('settings'),
-  ]);
-  const keep = (r: { deleted?: true }) => includeTombstones || r.deleted !== true;
-  const data: VocabData = {
-    words: wordRows.map(fromRow).filter(keep),
-    lists: lists.filter(keep),
-    cards: cards.filter(keep),
-  };
-  if (settingsRow) {
-    const { id: _id, ...settings } = settingsRow;
-    data.settings = settings;
-  }
-  return data;
+  return db.transaction('r', [db.words, db.lists, db.cards, db.settings], async () => {
+    const [wordRows, lists, cards, settingsRow] = await Promise.all([
+      db.words.toArray(),
+      db.lists.toArray(),
+      db.cards.toArray(),
+      db.settings.get('settings'),
+    ]);
+    const keep = (r: { deleted?: true }) => includeTombstones || r.deleted !== true;
+    const data: VocabData = {
+      words: wordRows.map(fromRow).filter(keep),
+      lists: lists.filter(keep),
+      cards: cards.filter(keep),
+    };
+    if (settingsRow) {
+      const { id: _id, ...settings } = settingsRow;
+      data.settings = settings;
+    }
+    return data;
+  });
 }
 
 export interface MergeOutcome {
@@ -59,10 +61,12 @@ export async function mergeIntoLocal(remote: VocabData): Promise<MergeOutcome> {
   });
 }
 
+/** Live records only (no tombstones): an export can restore words but never deletes anything. */
 export async function exportJson(savedAt: string = nowIso()): Promise<string> {
   return serializeFile(await readLocalData(false), savedAt);
 }
 
+/** Merges a file by newest edit and returns how many records were written. Never deletes anything the file doesn't delete. */
 export async function importJson(text: string): Promise<{ applied: number }> {
   const { applied } = await mergeIntoLocal(parseFile(text));
   if (applied > 0) markDirty();
