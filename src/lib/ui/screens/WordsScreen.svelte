@@ -63,6 +63,7 @@
 </script>
 
 <div class="stack">
+  <h1 class="sr-only">Words</h1>
   <input
     type="search"
     bind:value={query}
