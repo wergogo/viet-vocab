@@ -7,21 +7,35 @@ export interface StTable {
 
 let cached: Promise<StTable> | null = null;
 
-/** Loads the table lazily (a separate chunk in the production build). */
+/** Loads the table lazily (a separate chunk in the production build). A failed load is retried next time. */
 export function loadStTable(): Promise<StTable> {
-  cached ??= import('./st-table.json').then((m) => m.default as unknown as StTable);
+  cached ??= import('./st-table.json')
+    .then((m) => m.default as unknown as StTable)
+    .catch((e: unknown) => {
+      cached = null;
+      throw e;
+    });
   return cached;
 }
 
-/** The character plus its simplified and traditional counterparts (one step each way). */
+/**
+ * The character plus every simplified/traditional sibling: its simplified forms, then all traditional
+ * candidates of those (so 乾 → 干 → 幹, 乾, 榦). Used to widen search matches.
+ */
 export function charVariants(ch: string, table: StTable): string[] {
-  const out = new Set<string>([ch]);
-  for (const v of Array.from(table.s2t[ch] ?? '')) out.add(v);
-  for (const v of Array.from(table.t2s[ch] ?? '')) out.add(v);
+  const out = new Set<string>();
+  for (const s of [ch, ...Array.from(table.t2s[ch] ?? '')]) {
+    out.add(s);
+    for (const t of Array.from(table.s2t[s] ?? '')) out.add(t);
+  }
   return [...out];
 }
 
-/** Preferred traditional form (first OpenCC candidate), or the character itself. */
+/**
+ * Traditional form for a lookup: the character itself when it is already valid traditional
+ * (台, 里, 干) or has no entry, otherwise the first OpenCC candidate (发 → 發).
+ */
 export function toTraditional(ch: string, table: StTable): string {
-  return Array.from(table.s2t[ch] ?? '')[0] ?? ch;
+  const candidates = Array.from(table.s2t[ch] ?? '');
+  return candidates.length === 0 || candidates.includes(ch) ? ch : candidates[0];
 }
