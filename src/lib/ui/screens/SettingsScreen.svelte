@@ -70,7 +70,7 @@
     try {
       await deleteList(id);
       // The focused button's row is gone, so keep focus in this section.
-      listsHeading?.focus();
+      listsHeading?.focus({ preventScroll: true });
     } catch (e) {
       console.error(e);
       listError = `Couldn't delete “${name}”.`;
