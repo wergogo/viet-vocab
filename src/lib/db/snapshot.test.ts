@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileFormatError, NewerSchemaError, parseFile, serializeFile } from '../model/file';
 import { tombstone, type Word } from '../model/types';
+import { stripDiacritics } from '../text/normalize';
 import { db, resetDb } from './db';
 import { isDirty } from './dirty';
 import { createList } from './lists';
+import { findDuplicates, searchWords } from './search';
 import { expectDerivedFieldsFresh } from './test-utils';
 import { exportJson, importJson, mergeIntoLocal, readLocalData } from './snapshot';
-import { createWord, deleteWord, emptyDraft, getWord } from './words';
+import { createWord, deleteWord, emptyDraft, getWord, listLiveWords } from './words';
 
 const T1 = '2026-01-01T00:00:00.000Z';
 const T2 = '2026-01-02T00:00:00.000Z';
@@ -141,5 +143,23 @@ describe('readLocalData and round trips', () => {
     await resetDb();
     await importJson(text);
     expect(await readLocalData(false)).toEqual(before);
+  });
+});
+
+describe('imported words stay findable', () => {
+  it('finds every imported word by its own headword, even when the file has uncleaned text', async () => {
+    const z = String.fromCodePoint(0x200b);
+    // Each headword has diacritics, so searching for it uses exact mode and its stripped form uses loose mode.
+    const headwords = ['nhập  khẩu ', 'văn hóa'.normalize('NFD'), `qu${z}ốc gia`];
+    const words = headwords.map((word, i) => ({ ...remoteWord, id: `w${i}`, word }));
+    await importJson(serializeFile({ words, lists: [], cards: [] }, T1));
+    const rows = await listLiveWords();
+    expect(rows.map((w) => w.word)).toEqual(headwords);
+    const ids = (rs: { id: string }[]) => rs.map((r) => r.id);
+    for (const w of rows) {
+      expect(ids(findDuplicates(rows, w.word))).toContain(w.id);
+      expect(ids(searchWords(rows, { query: w.word, sort: 'newest' }))).toContain(w.id);
+      expect(ids(searchWords(rows, { query: stripDiacritics(w.word), sort: 'newest' }))).toContain(w.id);
+    }
   });
 });

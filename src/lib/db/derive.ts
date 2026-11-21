@@ -1,11 +1,11 @@
 import type { Rec, Tombstone, Word } from '../model/types';
 import { isLive } from '../model/types';
 import { cjkChars } from '../text/cjk';
-import { exactKey, looseKey } from '../text/normalize';
+import { cleanText, exactKey, looseKey, nfc } from '../text/normalize';
 import { canonicalTone } from '../text/tone';
 
 /** Bump when deriveFields changes, so stored rows are recomputed on the next start (see rederiveIfNeeded in db.ts). */
-export const DERIVE_VERSION = 1;
+export const DERIVE_VERSION = 2;
 
 /** Joins the word and its meanings in the search keys; cleanText'ed queries never contain it. */
 export const SEARCH_KEY_SEPARATOR = '\n';
@@ -29,12 +29,15 @@ export function isLiveRow(row: WordRow): row is LiveWordRow {
 /**
  * Search keys and characters stored with a word. The word and its meanings are joined with a newline;
  * queries are cleaned with cleanText (which collapses whitespace), so a query never matches across it.
+ * Keys are built from cleaned text and characters from NFC, because imported records may not be cleaned
+ * the way the form cleans them; the stored text itself is never rewritten.
  */
 export function deriveFields(w: Word): WordDerived {
-  const text = [w.word, ...w.senses.map((s) => s.meaning)].join(SEARCH_KEY_SEPARATOR);
+  const text = [w.word, ...w.senses.map((s) => s.meaning)].map(cleanText).join(SEARCH_KEY_SEPARATOR);
   const chars = new Set<string>();
   for (const s of w.syllables) {
-    if (s.char) for (const c of cjkChars(s.char)) chars.add(c);
+    // NFC maps CJK compatibility ideographs to their unified forms, which is what searches look for.
+    if (s.char) for (const c of cjkChars(nfc(s.char))) chars.add(c);
   }
   return {
     searchLoose: looseKey(text),

@@ -39,6 +39,39 @@ describe('deriveFields', () => {
   });
 });
 
+describe('deriveFields on uncleaned text', () => {
+  const keys = (text: string, meaning = 'Culture') => {
+    const { searchLoose, searchExact } = deriveFields({ ...word, word: text, senses: [{ pos: 'Noun', meaning }] });
+    return { searchLoose, searchExact };
+  };
+  const clean = keys('Văn Hóa');
+
+  it('ignores double and trailing spaces', () => {
+    expect(keys(' Văn  Hóa ', 'Culture  ')).toEqual(clean);
+  });
+
+  it('composes NFD text', () => {
+    expect(keys('Văn Hóa'.normalize('NFD'))).toEqual(clean);
+  });
+
+  it('drops zero-width characters', () => {
+    const z = String.fromCodePoint(0x200b);
+    expect(keys(`V${z}ăn Hóa${z}`, `Cul${z}ture`)).toEqual(clean);
+  });
+
+  it('maps a compatibility ideograph in a character to its unified form', () => {
+    const compat = String.fromCodePoint(0xf900);
+    const d = deriveFields({ ...word, syllables: [{ text: 'Văn', char: compat }, { text: 'Hóa' }] });
+    expect(d.chars).toEqual([compat.normalize('NFC')]);
+    expect(d.chars).not.toContain(compat);
+  });
+
+  it('leaves the stored text as it is', () => {
+    const raw = { ...word, word: ' Văn  Hóa ', senses: [{ pos: 'Noun', meaning: 'Culture  ' }] };
+    expect(fromRow(toRow(raw))).toEqual(raw);
+  });
+});
+
 describe('toRow / fromRow', () => {
   it('adds derived fields and strips them again', () => {
     const row = toRow(word);
