@@ -46,11 +46,42 @@ describe('mergeRecords', () => {
     const r = mergeRecords<R>([{ id: 'a', updatedAt: T2, v: 'edited' }], [{ id: 'a', updatedAt: T3, deleted: true }]);
     expect(r.merged).toEqual([{ id: 'a', updatedAt: T3, deleted: true }]);
     expect(r.toApply).toEqual([{ id: 'a', updatedAt: T3, deleted: true }]);
+    expect(r.remoteStale).toBe(false);
   });
 
   it('returns merged records sorted by id', () => {
     const r = mergeRecords<R>([{ id: 'c', updatedAt: T1 }, { id: 'a', updatedAt: T1 }], [{ id: 'b', updatedAt: T1 }]);
     expect(r.merged.map((x) => x.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('is idempotent: merging the result again changes nothing', () => {
+    const local: R[] = [{ id: 'a', updatedAt: T2 }, { id: 'b', updatedAt: T1 }];
+    const remote: R[] = [{ id: 'a', updatedAt: T1 }, { id: 'c', updatedAt: T3 }];
+    const first = mergeRecords<R>(local, remote);
+    const again = mergeRecords<R>(first.merged, first.merged);
+    expect(again.toApply).toEqual([]);
+    expect(again.remoteStale).toBe(false);
+    expect(mergeRecords<R>(first.merged, remote).toApply).toEqual([]);
+  });
+
+  it('reports changes on both sides at once', () => {
+    const r = mergeRecords<R>([{ id: 'a', updatedAt: T2 }], [{ id: 'b', updatedAt: T1 }]);
+    expect(r.toApply.map((x) => x.id)).toEqual(['b']);
+    expect(r.remoteStale).toBe(true);
+  });
+
+  it('lets a newer edit beat an older deletion', () => {
+    const r = mergeRecords<R>([{ id: 'a', updatedAt: T1, deleted: true }], [{ id: 'a', updatedAt: T2, v: 'restored' }]);
+    expect(r.merged).toEqual([{ id: 'a', updatedAt: T2, v: 'restored' }]);
+    expect(r.toApply).toEqual([{ id: 'a', updatedAt: T2, v: 'restored' }]);
+  });
+
+  it('handles empty inputs and does not mutate its arguments', () => {
+    expect(mergeRecords<R>([], [])).toEqual({ merged: [], toApply: [], remoteStale: false });
+    const local: R[] = [{ id: 'b', updatedAt: T1 }, { id: 'a', updatedAt: T1 }];
+    const snapshot = JSON.stringify(local);
+    mergeRecords<R>(local, []);
+    expect(JSON.stringify(local)).toBe(snapshot);
   });
 });
 

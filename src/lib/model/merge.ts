@@ -14,6 +14,11 @@ export interface MergeResult<T> {
   remoteStale: boolean;
 }
 
+/**
+ * Last-write-wins merge by `updatedAt`. Assumes canonical `toISOString()` timestamps (validated by
+ * `parseFile`), so string comparison orders them correctly, and unique ids on each side. Equal
+ * timestamps mean identical records by contract: the remote copy is kept and nothing is applied.
+ */
 export function mergeRecords<T extends Stamped>(local: T[], remote: T[]): MergeResult<T> {
   const localById = new Map(local.map((r) => [r.id, r]));
   const remoteById = new Map(remote.map((r) => [r.id, r]));
@@ -27,7 +32,7 @@ export function mergeRecords<T extends Stamped>(local: T[], remote: T[]): MergeR
     const r = remoteById.get(id);
     let winner: T;
     if (l && r) winner = l.updatedAt > r.updatedAt ? l : r;
-    else winner = (l ?? r) as T;
+    else winner = (l ?? r) as T; // at least one side has this id
     merged.push(winner);
     if (!l || l.updatedAt !== winner.updatedAt) toApply.push(winner);
     if (!r || r.updatedAt !== winner.updatedAt) remoteStale = true;
