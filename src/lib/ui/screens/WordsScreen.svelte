@@ -6,31 +6,67 @@
   import { liveLists, liveWords } from '../stores';
   import WordRowItem from '../components/WordRowItem.svelte';
 
+  /** Rows rendered per page; the count still reflects every match. */
+  const PAGE = 200;
+
   let query = $state('');
   let listId = $state('');
   let sort = $state<SortMode>('newest');
   let table = $state<StTable | null>(null);
+  let tableFailed = $state(false);
+  let limit = $state(PAGE);
 
+  // Load the simplified/traditional table the first time the query has a Han character.
+  // A failed load is retried on the next keystroke (loadStTable forgets failures).
   $effect(() => {
-    if (hasCjk(query) && !table) loadStTable().then((t) => (table = t));
+    if (hasCjk(query) && !table) {
+      loadStTable().then(
+        (t) => {
+          table = t;
+          tableFailed = false;
+        },
+        () => {
+          tableFailed = true;
+        },
+      );
+    }
   });
+
+  // A filter for a list that was deleted meanwhile falls back to all words.
+  const effectiveListId = $derived(($liveLists ?? []).some((l) => l.id === listId) ? listId : '');
 
   const results = $derived.by(() => {
     const t = table;
     return searchWords($liveWords ?? [], {
       query,
-      listId: listId || undefined,
+      listId: effectiveListId || undefined,
       sort,
       variants: t ? (c) => charVariants(c, t) : undefined,
     });
   });
+  const shown = $derived(results.slice(0, limit));
   const queryChars = $derived(cjkChars(query));
+  const waitingForTable = $derived(queryChars.length > 0 && !table && !tableFailed);
+  const statusText = $derived(
+    $liveWords === undefined || waitingForTable
+      ? 'Loading…'
+      : $liveWords.length === 0
+        ? ''
+        : results.length === 0
+          ? 'No matches.'
+          : `${results.length} ${results.length === 1 ? 'word' : 'words'}`,
+  );
+
+  function resetLimit() {
+    limit = PAGE;
+  }
 </script>
 
 <div class="stack">
   <input
     type="search"
     bind:value={query}
+    oninput={resetLimit}
     placeholder="Search Vietnamese, English or 漢字"
     aria-label="Search words"
     autocomplete="off"
@@ -38,13 +74,20 @@
     spellcheck="false"
   />
   <div class="row">
-    <select bind:value={listId} aria-label="Filter by list">
+    <select
+      value={effectiveListId}
+      onchange={(e) => {
+        listId = e.currentTarget.value;
+        resetLimit();
+      }}
+      aria-label="Filter by list"
+    >
       <option value="">All words</option>
       {#each $liveLists ?? [] as list (list.id)}
         <option value={list.id}>{list.name}</option>
       {/each}
     </select>
-    <select bind:value={sort} aria-label="Sort order">
+    <select bind:value={sort} onchange={resetLimit} aria-label="Sort order">
       <option value="newest">Newest first</option>
       <option value="az">A–Z</option>
     </select>
@@ -55,9 +98,14 @@
       Open character page for <span class="han">{queryChars[0]}</span>
     </a>
   {/if}
+  {#if tableFailed && queryChars.length > 0}
+    <p class="muted note">Simplified/traditional matching isn't available right now, so only exact characters match.</p>
+  {/if}
 
-  {#if $liveWords === undefined}
-    <p class="muted">Loading…</p>
+  <p class="muted count" role="status">{statusText}</p>
+
+  {#if $liveWords === undefined || waitingForTable}
+    <!-- the status line says Loading… -->
   {:else if $liveWords.length === 0}
     <div class="card stack">
       <strong>No words yet.</strong>
@@ -67,24 +115,23 @@
       </p>
     </div>
   {:else if results.length === 0}
-    <p class="muted">
-      No matches.
-      {#if query.trim() && !hasCjk(query)}
-        <a href={href({ name: 'add', word: query.trim() })}>Add “{query.trim()}”</a>
-      {/if}
-    </p>
+    {#if query.trim() && !hasCjk(query)}
+      <p><a href={href({ name: 'add', word: query.trim() })}>Add “{query.trim()}”</a></p>
+    {/if}
   {:else}
-    <p class="muted count">{results.length} {results.length === 1 ? 'word' : 'words'}</p>
     <ul class="plain-list">
-      {#each results as word (word.id)}
+      {#each shown as word (word.id)}
         <li><WordRowItem {word} /></li>
       {/each}
     </ul>
+    {#if results.length > limit}
+      <button type="button" onclick={() => (limit += PAGE)}>Show more ({results.length - limit} more)</button>
+    {/if}
   {/if}
 </div>
 
 <style>
   .row select { flex: 1; }
-  .count { margin: 0; font-size: 14px; }
-  .card p { margin: 0; }
+  .count, .note { margin: 0; font-size: 14px; }
+  .card p, p { margin: 0; }
 </style>

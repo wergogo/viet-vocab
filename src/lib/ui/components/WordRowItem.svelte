@@ -8,7 +8,11 @@
   const firstMeaning = $derived(word.senses[0]?.meaning ?? '');
 </script>
 
-<a class="word-row" href={href({ name: 'word', id: word.id })}>
+<a
+  class="word-row"
+  href={href({ name: 'word', id: word.id })}
+  aria-label={[word.word, chars, firstMeaning].filter(Boolean).join(', ')}
+>
   <span class="w">{word.word}</span>
   {#if chars}<span class="han">{chars}</span>{/if}
   {#if firstMeaning}<span class="m muted">{firstMeaning}</span>{/if}
