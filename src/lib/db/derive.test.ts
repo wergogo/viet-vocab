@@ -20,6 +20,23 @@ describe('deriveFields', () => {
     expect(d.searchExact).toBe('văn hoá\nculture');
     expect(d.chars).toEqual(['文', '化']);
   });
+
+  it('deduplicates characters, splits multi-character syllables and keeps astral Nôm', () => {
+    const nom = String.fromCodePoint(0x20000);
+    const d = deriveFields({
+      ...word,
+      syllables: [{ text: 'a', char: '文' }, { text: 'b', char: '文化' }, { text: 'c', char: nom }, { text: 'd' }],
+    });
+    expect(d.chars).toEqual(['文', '化', nom]);
+  });
+
+  it('includes every meaning and folds đ and tone placement', () => {
+    const senses = [{ pos: 'Verb', meaning: 'to go' }, { pos: 'Noun', meaning: 'trip' }];
+    const a = deriveFields({ ...word, word: 'Đi Hoá', senses });
+    const b = deriveFields({ ...word, word: 'Đi Hóa', senses });
+    expect(a.searchLoose).toBe('di hoa\nto go\ntrip');
+    expect(a.searchExact).toBe(b.searchExact);
+  });
 });
 
 describe('toRow / fromRow', () => {
