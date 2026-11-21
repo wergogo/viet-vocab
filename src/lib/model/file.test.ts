@@ -58,7 +58,7 @@ describe('parseFile errors', () => {
     for (const updatedAt of ['2026-01-01T00:00:00Z', '2026-01-01T07:00:00.000+07:00', '2026-13-01T00:00:00.000Z', 'zzz']) {
       expect(() => parseFile(JSON.stringify({ ...base, words: [{ id: 'w', updatedAt }] }))).toThrow(FileFormatError);
     }
-    const twice = [{ id: 'w', updatedAt: T }, { id: 'w', updatedAt: T }];
+    const twice = [{ id: 'w', updatedAt: T, deleted: true }, { id: 'w', updatedAt: T, deleted: true }];
     expect(() => parseFile(JSON.stringify({ ...base, words: twice }))).toThrow(FileFormatError);
   });
 
@@ -71,5 +71,49 @@ describe('parseFile errors', () => {
     for (const settings of bad) {
       expect(() => parseFile(JSON.stringify({ ...base, settings }))).toThrow(FileFormatError);
     }
+  });
+});
+
+describe('parseFile record validation', () => {
+  const base = { app: 'viet-vocab', schemaVersion: 1, savedAt: T, words: [], lists: [], cards: [] };
+  const parse = (over: Record<string, unknown>) => () => parseFile(JSON.stringify({ ...base, ...over }));
+
+  it('rejects live records that are missing fields the app reads', () => {
+    expect(parse({ words: [{ id: 'w', updatedAt: T }] })).toThrow('Word #1 (id w) has no word text.');
+    expect(parse({ words: [{ id: 'w', updatedAt: T, word: 'x', syllables: [], senses: [], listIds: 'l1' }] })).toThrow(FileFormatError);
+    expect(parse({ lists: [{ id: 'l', updatedAt: T }] })).toThrow('List #1 (id l) has no name.');
+    expect(parse({ cards: [{ id: 'c', updatedAt: T, wordId: 'w', direction: 'sideways', fsrs: {}, introducedAt: T }] })).toThrow(FileFormatError);
+    expect(parse({ cards: [{ id: 'c', updatedAt: T, wordId: 'w', direction: 'forward', fsrs: null, introducedAt: T }] })).toThrow(FileFormatError);
+  });
+
+  it('accepts bare tombstones but rejects odd deleted flags, non-records and duplicate list ids', () => {
+    expect(parse({ words: [{ id: 'w', updatedAt: T, deleted: true }] })).not.toThrow();
+    expect(parse({ words: [{ id: 'w', updatedAt: T, deleted: 'yes' }] })).toThrow(FileFormatError);
+    expect(parse({ words: [null] })).toThrow('Word #1 is not a record.');
+    const lists = [
+      { id: 'a', name: 'A', createdAt: T, updatedAt: T },
+      { id: 'a', name: 'B', createdAt: T, updatedAt: T },
+    ];
+    expect(parse({ lists })).toThrow(FileFormatError);
+  });
+
+  it('rejects odd roots, schema versions and settings', () => {
+    for (const text of ['null', '[]', '42']) expect(() => parseFile(text)).toThrow(FileFormatError);
+    expect(parse({ schemaVersion: 0 })).toThrow(FileFormatError);
+    expect(parse({ schemaVersion: 1.5 })).toThrow(FileFormatError);
+    expect(parse({ settings: null })).toThrow(FileFormatError);
+  });
+});
+
+describe('serializeFile round trips', () => {
+  it('is stable and preserves Vietnamese and Han text exactly', () => {
+    const text = serializeFile(data, T);
+    expect(serializeFile(parseFile(text), T)).toBe(text);
+    expect(parseFile(text).words.find((w) => w.id === 'w2')).toEqual(data.words[0]);
+  });
+
+  it('round-trips card tombstones with their wordId', () => {
+    const file = parseFile(serializeFile({ words: [], lists: [], cards: [tombstone('w1:f', T, 'w1')] }, T));
+    expect(file.cards).toEqual([{ id: 'w1:f', updatedAt: T, deleted: true, wordId: 'w1' }]);
   });
 });
