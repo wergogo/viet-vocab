@@ -80,7 +80,7 @@ describe('parseFile record validation', () => {
 
   it('rejects live records that are missing fields the app reads', () => {
     expect(parse({ words: [{ id: 'w', updatedAt: T }] })).toThrow('Word #1 (id w) has no word text.');
-    expect(parse({ words: [{ id: 'w', updatedAt: T, word: 'x', syllables: [], senses: [], listIds: 'l1' }] })).toThrow(FileFormatError);
+    expect(parse({ words: [{ id: 'w', updatedAt: T, word: 'x', syllables: [], senses: [], listIds: 'l1', createdAt: T }] })).toThrow('Word #1 (id w) has no list ids.');
     expect(parse({ lists: [{ id: 'l', updatedAt: T }] })).toThrow('List #1 (id l) has no name.');
     expect(parse({ cards: [{ id: 'c', updatedAt: T, wordId: 'w', direction: 'sideways', fsrs: {}, introducedAt: T }] })).toThrow(FileFormatError);
     expect(parse({ cards: [{ id: 'c', updatedAt: T, wordId: 'w', direction: 'forward', fsrs: null, introducedAt: T }] })).toThrow(FileFormatError);
@@ -102,6 +102,104 @@ describe('parseFile record validation', () => {
     expect(parse({ schemaVersion: 0 })).toThrow(FileFormatError);
     expect(parse({ schemaVersion: 1.5 })).toThrow(FileFormatError);
     expect(parse({ settings: null })).toThrow(FileFormatError);
+  });
+});
+
+describe('parseFile field checks', () => {
+  const base = { app: 'viet-vocab', schemaVersion: 1, savedAt: T, words: [], lists: [], cards: [] };
+  const parse = (over: Record<string, unknown>) => () => parseFile(JSON.stringify({ ...base, ...over }));
+  const valid = {
+    id: 'w',
+    word: 'nhập khẩu',
+    syllables: [{ text: 'nhập', char: '入', gloss: 'enter' }, { text: 'khẩu' }],
+    senses: [{ pos: 'Verb', meaning: 'to import' }],
+    listIds: ['l1'],
+    createdAt: T,
+    updatedAt: T,
+  };
+  const word = (over: Record<string, unknown>) => parse({ words: [{ ...valid, ...over }] });
+
+  it('accepts every field the app writes and passes unknown fields through', () => {
+    const full = {
+      ...valid,
+      ipaHanoi: '[nhap]',
+      ipaSaigon: '[nhap]',
+      etymology: 'From 入 and 口.',
+      notes: 'news word',
+      audioFile: 'Vi-nhap-khau.ogg',
+      source: { wiktionaryTitle: 'nhập khẩu', fetchedAt: T },
+      addedLater: { x: 1 },
+    };
+    expect(parseFile(JSON.stringify({ ...base, words: [full] })).words).toEqual([full]);
+  });
+
+  it('rejects a null meaning', () => {
+    expect(word({ senses: [null] })).toThrow('Word #1 (id w) has an invalid meaning #1.');
+  });
+
+  it('rejects a meaning that is not text', () => {
+    const senses = [{ pos: 'Verb', meaning: 'to import' }, { pos: 'Noun', meaning: 5 }];
+    expect(word({ senses })).toThrow('Word #1 (id w) has an invalid meaning #2.');
+  });
+
+  it('rejects an ipaHanoi that is not text', () => {
+    expect(word({ ipaHanoi: 7 })).toThrow('Word #1 (id w) has an invalid ipaHanoi.');
+  });
+
+  it('rejects a word without createdAt', () => {
+    expect(word({ createdAt: undefined })).toThrow('Word #1 (id w) has an invalid createdAt.');
+  });
+
+  it('rejects an empty word', () => {
+    expect(word({ word: '' })).toThrow('Word #1 (id w) has no word text.');
+  });
+
+  it('rejects a list with an empty name', () => {
+    expect(parse({ lists: [{ id: 'l', name: '', createdAt: T, updatedAt: T }] })).toThrow('List #1 (id l) has no name.');
+  });
+
+  it('rejects a syllable character that is not text', () => {
+    expect(word({ syllables: [{ text: 'nhập', char: 5 }, { text: 'khẩu' }] })).toThrow('Word #1 (id w) has an invalid syllable #1.');
+  });
+
+  it('rejects a source with an invalid fetchedAt', () => {
+    expect(word({ source: { wiktionaryTitle: 'nhập khẩu', fetchedAt: 'yesterday' } })).toThrow('Word #1 (id w) has an invalid source.');
+  });
+
+  it('rejects other fields of the wrong shape', () => {
+    expect(parse({ words: [{ id: '', updatedAt: T, deleted: true }] })).toThrow('Word #1 has no id.');
+    expect(word({ word: 5 })).toThrow('Word #1 (id w) has no word text.');
+    expect(word({ syllables: [{ char: '入' }] })).toThrow('Word #1 (id w) has an invalid syllable #1.');
+    expect(word({ syllables: [{ text: 'nhập', gloss: null }] })).toThrow('Word #1 (id w) has an invalid syllable #1.');
+    expect(word({ senses: [{ meaning: 'to import' }] })).toThrow('Word #1 (id w) has an invalid meaning #1.');
+    expect(word({ listIds: ['l1', 2] })).toThrow('Word #1 (id w) has an invalid list id #2.');
+    for (const field of ['ipaSaigon', 'etymology', 'notes', 'audioFile']) {
+      expect(word({ [field]: null })).toThrow(`Word #1 (id w) has an invalid ${field}.`);
+    }
+    expect(word({ source: null })).toThrow('Word #1 (id w) has an invalid source.');
+    expect(word({ source: { fetchedAt: T } })).toThrow('Word #1 (id w) has an invalid source.');
+    expect(parse({ lists: [{ id: 'l', name: 'A', updatedAt: T }] })).toThrow('List #1 (id l) has an invalid createdAt.');
+  });
+
+  it('rejects newCardsPerDay unless it is a whole number from 0 to 1000', () => {
+    const text = (perDay: string) =>
+      `{"app":"viet-vocab","schemaVersion":1,"savedAt":"${T}","words":[],"lists":[],"cards":[],` +
+      `"settings":{"newCardsPerDay":${perDay},"reverseCards":false,"updatedAt":"${T}"}}`;
+    for (const perDay of ['1e999', '2.5', '-1', '1001']) {
+      expect(() => parseFile(text(perDay))).toThrow('The settings record is invalid.');
+    }
+    for (const perDay of ['0', '1000']) expect(parseFile(text(perDay)).settings?.newCardsPerDay).toBe(Number(perDay));
+  });
+
+  it('rebuilds word tombstones with only id, updatedAt and deleted', () => {
+    const dead = { id: 'w', updatedAt: T, deleted: true, word: 'nhập', notes: 'old notes', wordId: 'x' };
+    expect(parseFile(JSON.stringify({ ...base, words: [dead] })).words).toStrictEqual([{ id: 'w', updatedAt: T, deleted: true }]);
+  });
+
+  it('keeps the wordId of card tombstones and requires it to be text', () => {
+    const dead = { id: 'w:f', updatedAt: T, deleted: true, wordId: 'w', fsrs: { due: T } };
+    expect(parseFile(JSON.stringify({ ...base, cards: [dead] })).cards).toStrictEqual([{ id: 'w:f', updatedAt: T, deleted: true, wordId: 'w' }]);
+    expect(parse({ cards: [{ ...dead, wordId: 5 }] })).toThrow('Review card #1 (id w:f) has an invalid wordId.');
   });
 });
 

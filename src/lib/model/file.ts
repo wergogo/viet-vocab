@@ -1,4 +1,4 @@
-import type { List, Rec, ReviewCard, Settings, Word } from './types';
+import { tombstone, type List, type Rec, type ReviewCard, type Settings, type Word } from './types';
 
 export const APP_ID = 'viet-vocab';
 export const SCHEMA_VERSION = 1;
@@ -41,23 +41,71 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return isString(value) && value !== '';
+}
+
+/** Optional text is absent or a string; the app never writes null or other types there. */
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || isString(value);
+}
+
+type Fields = Record<string, unknown>;
+
+/** A JSON object: not null and not an array. */
+function isObject(value: unknown): value is Fields {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** The 1-based position of the first item that fails `ok`, or 0 when every item passes. */
+function firstInvalid(items: unknown[], ok: (item: unknown) => boolean): number {
+  return items.findIndex((item) => !ok(item)) + 1;
+}
+
+const isSyllable = (s: unknown): boolean =>
+  isObject(s) && isString(s.text) && isOptionalString(s.char) && isOptionalString(s.gloss);
+const isSense = (s: unknown): boolean => isObject(s) && isString(s.pos) && isString(s.meaning);
+const isSource = (s: unknown): boolean => isObject(s) && isString(s.wiktionaryTitle) && isCanonicalIso(s.fetchedAt);
+
+const OPTIONAL_WORD_TEXT = ['ipaHanoi', 'ipaSaigon', 'etymology', 'notes', 'audioFile'] as const;
+
+function wordProblem(r: Fields): string | null {
+  if (!isNonEmptyString(r.word)) return 'has no word text';
+  if (!isCanonicalIso(r.createdAt)) return 'has an invalid createdAt';
+  if (!Array.isArray(r.syllables)) return 'has no syllables list';
+  const syllable = firstInvalid(r.syllables, isSyllable);
+  if (syllable) return `has an invalid syllable #${syllable}`;
+  if (!Array.isArray(r.senses)) return 'has no meanings list';
+  const sense = firstInvalid(r.senses, isSense);
+  if (sense) return `has an invalid meaning #${sense}`;
+  if (!Array.isArray(r.listIds)) return 'has no list ids';
+  const listId = firstInvalid(r.listIds, isString);
+  if (listId) return `has an invalid list id #${listId}`;
+  const field = OPTIONAL_WORD_TEXT.find((f) => !isOptionalString(r[f]));
+  if (field) return `has an invalid ${field}`;
+  if (r.source !== undefined && !isSource(r.source)) return 'has an invalid source';
+  return null;
+}
+
+/** The most new cards per day a settings record may ask for. */
+const MAX_NEW_CARDS_PER_DAY = 1000;
+
+function isNewCardsPerDay(value: unknown): boolean {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_NEW_CARDS_PER_DAY;
+}
+
 type Collection = 'words' | 'lists' | 'cards';
 
 const LABELS: Record<Collection, string> = { words: 'Word', lists: 'List', cards: 'Review card' };
 
-/** Problems with the fields the app reads from live (non-deleted) records, or null when fine. */
-const LIVE_CHECKS: Record<Collection, (r: Record<string, unknown>) => string | null> = {
-  words: (r) =>
-    !isString(r.word)
-      ? 'has no word text'
-      : !Array.isArray(r.syllables)
-        ? 'has no syllables list'
-        : !Array.isArray(r.senses)
-          ? 'has no meanings list'
-          : !Array.isArray(r.listIds)
-            ? 'has no list ids'
-            : null,
-  lists: (r) => (isString(r.name) ? null : 'has no name'),
+/**
+ * Problems with a live (non-deleted) record, or null when its fields have the shapes the app writes.
+ * Unknown extra fields are allowed, so files from a newer app version with new optional fields still import.
+ */
+const LIVE_CHECKS: Record<Collection, (r: Fields) => string | null> = {
+  words: wordProblem,
+  lists: (r) =>
+    !isNonEmptyString(r.name) ? 'has no name' : !isCanonicalIso(r.createdAt) ? 'has an invalid createdAt' : null,
   cards: (r) =>
     !isString(r.wordId)
       ? 'has no word id'
@@ -70,26 +118,31 @@ const LIVE_CHECKS: Record<Collection, (r: Record<string, unknown>) => string | n
             : null,
 };
 
-function validateRecords(key: Collection, records: unknown[]): void {
+/**
+ * Checks one collection and returns its records as they will be stored: live records unchanged,
+ * tombstones rebuilt with only the fields spec §4.2 keeps (id, updatedAt, deleted, and wordId on cards).
+ */
+function readRecords(key: Collection, records: unknown[]): unknown[] {
   const seen = new Set<string>();
-  records.forEach((record, index) => {
+  return records.map((record, index) => {
     const where = `${LABELS[key]} #${index + 1}`;
-    if (typeof record !== 'object' || record === null || Array.isArray(record)) {
-      throw new FileFormatError(`${where} is not a record.`);
-    }
-    const r = record as Record<string, unknown>;
-    const id = r.id;
-    if (!isString(id)) throw new FileFormatError(`${where} has no id.`);
-    if (!isCanonicalIso(r.updatedAt)) throw new FileFormatError(`${where} (id ${id}) has an invalid updatedAt.`);
+    if (!isObject(record)) throw new FileFormatError(`${where} is not a record.`);
+    const { id, updatedAt } = record;
+    if (!isNonEmptyString(id)) throw new FileFormatError(`${where} has no id.`);
+    if (!isCanonicalIso(updatedAt)) throw new FileFormatError(`${where} (id ${id}) has an invalid updatedAt.`);
     if (seen.has(id)) throw new FileFormatError(`"${key}" contains the id ${id} twice.`);
     seen.add(id);
-    if (r.deleted !== undefined && r.deleted !== true) {
-      throw new FileFormatError(`${where} (id ${id}) has an invalid deleted flag.`);
+    if (record.deleted === true) {
+      const wordId = key === 'cards' ? record.wordId : undefined;
+      if (wordId !== undefined && !isString(wordId)) {
+        throw new FileFormatError(`${where} (id ${id}) has an invalid wordId.`);
+      }
+      return tombstone(id, updatedAt, wordId);
     }
-    if (r.deleted !== true) {
-      const problem = LIVE_CHECKS[key](r);
-      if (problem) throw new FileFormatError(`${where} (id ${id}) ${problem}.`);
-    }
+    if (record.deleted !== undefined) throw new FileFormatError(`${where} (id ${id}) has an invalid deleted flag.`);
+    const problem = LIVE_CHECKS[key](record);
+    if (problem) throw new FileFormatError(`${where} (id ${id}) ${problem}.`);
+    return record;
   });
 }
 
@@ -126,16 +179,17 @@ export function parseFile(text: string): VocabFile {
     );
   }
   if (!isString(file.savedAt)) throw new FileFormatError('The file has no savedAt time.');
+  const checked = {} as Record<Collection, unknown[]>;
   for (const key of ['words', 'lists', 'cards'] as const) {
     const records: unknown = file[key];
     if (!Array.isArray(records)) throw new FileFormatError(`The file has no "${key}" list.`);
-    validateRecords(key, records);
+    checked[key] = readRecords(key, records);
   }
   if (file.settings !== undefined) {
     const s = file.settings as Partial<Settings> | null;
-    if (typeof s?.newCardsPerDay !== 'number' || typeof s?.reverseCards !== 'boolean' || !isCanonicalIso(s.updatedAt)) {
+    if (!isNewCardsPerDay(s?.newCardsPerDay) || typeof s?.reverseCards !== 'boolean' || !isCanonicalIso(s.updatedAt)) {
       throw new FileFormatError('The settings record is invalid.');
     }
   }
-  return file as VocabFile; // shape validated above
+  return { ...file, ...checked } as VocabFile; // shape validated above
 }
