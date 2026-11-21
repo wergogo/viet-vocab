@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createList } from '../../db/lists';
+  import { findOrCreateList } from '../../db/lists';
   import { liveLists } from '../stores';
 
   let { selected = $bindable() }: { selected: string[] } = $props();
@@ -10,14 +10,19 @@
     selected = selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id];
   }
 
+  let adding = false;
+
   async function add() {
     const name = newName.trim();
-    if (!name) return;
-    const key = name.toLocaleLowerCase('vi');
-    const existing = ($liveLists ?? []).find((l) => l.name.toLocaleLowerCase('vi') === key);
-    const id = existing ? existing.id : (await createList(name)).id;
-    if (!selected.includes(id)) selected = [...selected, id];
+    if (!name || adding) return;
+    adding = true;
     newName = '';
+    try {
+      const list = await findOrCreateList(name);
+      if (!selected.includes(list.id)) selected = [...selected, list.id];
+    } finally {
+      adding = false;
+    }
   }
 </script>
 

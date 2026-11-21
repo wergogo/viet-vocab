@@ -20,6 +20,24 @@ export async function createList(name: string): Promise<List> {
   return list;
 }
 
+/** Returns the live list with this name (ignoring case), creating it if there is none. One transaction, so concurrent calls can't create duplicates. */
+export async function findOrCreateList(name: string): Promise<List> {
+  const clean = requireName(name);
+  const key = clean.toLocaleLowerCase('vi');
+  const { list, created } = await db.transaction('rw', db.lists, async () => {
+    const existing = (await db.lists.toArray()).find(
+      (l): l is List => isLive(l) && l.name.toLocaleLowerCase('vi') === key,
+    );
+    if (existing) return { list: existing, created: false };
+    const now = nowIso();
+    const fresh: List = { id: newId(), name: clean, createdAt: now, updatedAt: now };
+    await db.lists.put(fresh);
+    return { list: fresh, created: true };
+  });
+  if (created) markDirty();
+  return list;
+}
+
 export async function renameList(id: string, name: string): Promise<void> {
   const clean = requireName(name);
   const changed = await db.transaction('rw', db.lists, async () => {

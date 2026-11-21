@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, resetDb } from './db';
-import { createList, deleteList, listLiveLists, renameList } from './lists';
+import { createList, deleteList, findOrCreateList, listLiveLists, renameList } from './lists';
 import { createWord, emptyDraft, getWord } from './words';
 import { expectDerivedFieldsFresh } from './test-utils';
 import { isDirty } from './dirty';
@@ -19,6 +19,15 @@ afterEach(() => {
 afterEach(expectDerivedFieldsFresh);
 
 describe('lists', () => {
+  it('findOrCreateList reuses a live list with the same name, even under concurrent calls', async () => {
+    const a = await findOrCreateList('Economy');
+    const b = await findOrCreateList('  economy ');
+    expect(b.id).toBe(a.id);
+    const [c, d] = await Promise.all([findOrCreateList('News'), findOrCreateList('news')]);
+    expect(c.id).toBe(d.id);
+    expect((await listLiveLists()).map((l) => l.name)).toEqual(['Economy', 'News']);
+  });
+
   it('creates lists and returns them in Vietnamese order', async () => {
     await createList('Đồ ăn');
     await createList('  Du   lịch ');
