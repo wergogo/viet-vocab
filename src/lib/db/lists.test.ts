@@ -19,6 +19,14 @@ afterEach(() => {
 afterEach(expectDerivedFieldsFresh);
 
 describe('lists', () => {
+  it('findOrCreateList ignores deleted lists and rejects empty names', async () => {
+    const old = await findOrCreateList('Travel');
+    await deleteList(old.id);
+    const fresh = await findOrCreateList('travel');
+    expect(fresh.id).not.toBe(old.id);
+    await expect(findOrCreateList('  ')).rejects.toThrow('List name is required');
+  });
+
   it('findOrCreateList reuses a live list with the same name, even under concurrent calls', async () => {
     const a = await findOrCreateList('Economy');
     const b = await findOrCreateList('  economy ');

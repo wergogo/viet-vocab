@@ -28,12 +28,12 @@
   <legend>Meanings</legend>
   {#each senses as _, i (i)}
     <div class="sense">
-      <input list="word-classes" bind:value={senses[i].pos} placeholder="Word class" aria-label="Word class" />
-      <input bind:value={senses[i].meaning} placeholder="Meaning" aria-label="Meaning" />
+      <input list="word-classes" bind:value={senses[i].pos} placeholder="Word class" aria-label={`Word class ${i + 1}`} />
+      <input bind:value={senses[i].meaning} placeholder="Meaning" aria-label={`Meaning ${i + 1}`} />
       <div class="row tools">
-        <button type="button" onclick={() => move(i, -1)} disabled={i === 0} aria-label="Move meaning up">↑</button>
-        <button type="button" onclick={() => move(i, 1)} disabled={i === senses.length - 1} aria-label="Move meaning down">↓</button>
-        <button type="button" class="danger" onclick={() => remove(i)} aria-label="Remove meaning">✕</button>
+        <button type="button" onclick={() => move(i, -1)} disabled={i === 0} aria-label={`Move meaning ${i + 1} up`}>↑</button>
+        <button type="button" onclick={() => move(i, 1)} disabled={i === senses.length - 1} aria-label={`Move meaning ${i + 1} down`}>↓</button>
+        <button type="button" class="danger" onclick={() => remove(i)} aria-label={`Remove meaning ${i + 1}`}>✕</button>
       </div>
     </div>
   {/each}

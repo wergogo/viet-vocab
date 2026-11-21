@@ -11,15 +11,20 @@
   }
 
   let adding = false;
+  let addError = $state('');
 
   async function add() {
     const name = newName.trim();
     if (!name || adding) return;
     adding = true;
+    addError = '';
     newName = '';
     try {
       const list = await findOrCreateList(name);
       if (!selected.includes(list.id)) selected = [...selected, list.id];
+    } catch (e) {
+      newName = name;
+      addError = e instanceof Error ? e.message : String(e);
     } finally {
       adding = false;
     }
@@ -55,6 +60,7 @@
     />
     <button type="button" onclick={add} disabled={!newName.trim()}>Create</button>
   </div>
+  {#if addError}<p class="notice" role="alert">{addError}</p>{/if}
 </fieldset>
 
 <style>
