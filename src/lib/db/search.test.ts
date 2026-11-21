@@ -83,3 +83,41 @@ describe('findDuplicates', () => {
     expect(findDuplicates(words, '  ')).toEqual([]);
   });
 });
+
+describe('query details', () => {
+  const extra = [...words, row('5', 'đi', [undefined], 'to go', '2026-01-05T00:00:00.000Z')];
+
+  it('folds đ in loose queries and keeps it exact otherwise', () => {
+    expect(ids(searchWords(extra, { query: 'di', sort: 'newest' }))).toEqual(['5']);
+    expect(ids(searchWords(extra, { query: 'đ', sort: 'newest' }))).toEqual(['5']);
+  });
+
+  it('switches to character mode when the query mixes Latin and Han text', () => {
+    expect(ids(searchWords(words, { query: 'xyz 入', sort: 'newest' }))).toEqual(['1']);
+  });
+
+  it('combines list filters with queries and never mutates its input', () => {
+    const before = ids(words);
+    expect(ids(searchWords(words, { query: 'nation', listId: 'econ', sort: 'az' }))).toEqual(['4']);
+    expect(ids(searchWords(words, { query: 'culture', listId: 'econ', sort: 'az' }))).toEqual([]);
+    expect(ids(words)).toEqual(before);
+  });
+});
+
+describe('findDuplicates edge cases', () => {
+  it('matches headwords only, including words with empty or no meanings', () => {
+    expect(findDuplicates(words, 'culture')).toEqual([]);
+    const blank = row('9', 'chào', [undefined], '', '2026-01-09T00:00:00.000Z');
+    expect(ids(findDuplicates([...words, blank], 'Chào'))).toEqual(['9']);
+    const none = toRow({
+      id: '10',
+      word: 'xin',
+      syllables: [{ text: 'xin' }],
+      senses: [],
+      listIds: [],
+      createdAt: '2026-01-10T00:00:00.000Z',
+      updatedAt: '2026-01-10T00:00:00.000Z',
+    });
+    expect(ids(findDuplicates([none], 'XIN'))).toEqual(['10']);
+  });
+});

@@ -7,6 +7,9 @@ import { canonicalTone } from '../text/tone';
 /** Bump when deriveFields changes, so stored rows are recomputed on the next start (see rederiveIfNeeded in db.ts). */
 export const DERIVE_VERSION = 1;
 
+/** Joins the word and its meanings in the search keys; cleanText'ed queries never contain it. */
+export const SEARCH_KEY_SEPARATOR = '\n';
+
 export interface WordDerived {
   /** Word + meanings, diacritics removed, lowercase. */
   searchLoose: string;
@@ -28,7 +31,7 @@ export function isLiveRow(row: WordRow): row is LiveWordRow {
  * queries are cleaned with cleanText (which collapses whitespace), so a query never matches across it.
  */
 export function deriveFields(w: Word): WordDerived {
-  const text = [w.word, ...w.senses.map((s) => s.meaning)].join('\n');
+  const text = [w.word, ...w.senses.map((s) => s.meaning)].join(SEARCH_KEY_SEPARATOR);
   const chars = new Set<string>();
   for (const s of w.syllables) {
     if (s.char) for (const c of cjkChars(s.char)) chars.add(c);
