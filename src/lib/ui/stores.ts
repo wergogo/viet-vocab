@@ -1,9 +1,21 @@
 import { liveQuery } from 'dexie';
+import { readable, type Readable } from 'svelte/store';
 import { listLiveLists } from '../db/lists';
 import { listLiveWords } from '../db/words';
 
+/** A Svelte store over a Dexie live query: undefined until the first result; query errors are logged. */
+function liveStore<T>(querier: () => Promise<T>): Readable<T | undefined> {
+  return readable<T | undefined>(undefined, (set) => {
+    const subscription = liveQuery(querier).subscribe({
+      next: (value) => set(value),
+      error: (err: unknown) => console.error('Live query failed', err),
+    });
+    return () => subscription.unsubscribe();
+  });
+}
+
 /** All live words (with derived fields); re-emits whenever the database changes. */
-export const liveWords = liveQuery(() => listLiveWords());
+export const liveWords = liveStore(() => listLiveWords());
 
 /** All live lists in Vietnamese order. */
-export const liveLists = liveQuery(() => listLiveLists());
+export const liveLists = liveStore(() => listLiveLists());

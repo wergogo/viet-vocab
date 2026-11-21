@@ -8,11 +8,22 @@ export type Route =
   | { name: 'char'; char: string }
   | { name: 'settings' };
 
+/** decodeURIComponent that returns '' for malformed escapes, so a bad link falls back instead of throwing. */
+function safeDecode(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return '';
+  }
+}
+
 export function parseHash(hash: string): Route {
   const raw = hash.replace(/^#\/?/, '');
-  const [path = '', query = ''] = raw.split('?');
+  const q = raw.indexOf('?');
+  const path = q < 0 ? raw : raw.slice(0, q);
+  const query = q < 0 ? '' : raw.slice(q + 1);
   const [name = '', arg = ''] = path.split('/');
-  const param = arg ? decodeURIComponent(arg) : '';
+  const param = arg ? safeDecode(arg) : '';
   switch (name) {
     case 'word':
       return param ? { name: 'word', id: param } : { name: 'words' };
@@ -49,6 +60,7 @@ export function href(route: Route): string {
 /** The current route, updated on every hash change. */
 export const route = readable<Route>(parseHash(location.hash), (set) => {
   const update = () => set(parseHash(location.hash));
+  update();
   window.addEventListener('hashchange', update);
   return () => window.removeEventListener('hashchange', update);
 });
