@@ -22,12 +22,14 @@ export async function createList(name: string): Promise<List> {
 
 export async function renameList(id: string, name: string): Promise<void> {
   const clean = requireName(name);
-  await db.transaction('rw', db.lists, async () => {
+  const changed = await db.transaction('rw', db.lists, async () => {
     const list = await db.lists.get(id);
     if (!list || !isLive(list)) throw new Error(`List ${id} not found`);
+    if (list.name === clean) return false;
     await db.lists.put({ ...list, name: clean, updatedAt: nextTimestamp(list.updatedAt) });
+    return true;
   });
-  markDirty();
+  if (changed) markDirty();
 }
 
 /** Tombstones the list and removes its id from every word that had it. Deleting twice does nothing. */
