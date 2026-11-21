@@ -17,6 +17,7 @@
   const listNames = $derived(
     word ? ($liveLists ?? []).filter((l) => word.listIds.includes(l.id)).map((l) => l.name) : [],
   );
+  // Keep in sync with the <dl> rows below, or a row that is the word's only fact won't show.
   const hasFacts = $derived(
     !!word &&
       !!(word.ipaHanoi || word.ipaSaigon || word.senses.length > 0 || word.etymology || word.notes || listNames.length > 0),
