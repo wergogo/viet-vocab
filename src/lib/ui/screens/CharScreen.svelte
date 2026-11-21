@@ -1,7 +1,7 @@
 <script lang="ts">
   import { searchWords } from '../../db/search';
-  import { hasCjk } from '../../text/cjk';
-  import { charVariants, loadStTable, type StTable } from '../../text/variants';
+  import { isCjkChar } from '../../text/cjk';
+  import { charVariants, loadStTable, toTraditional, type StTable } from '../../text/variants';
   import { liveWords } from '../stores';
   import WordRowItem from '../components/WordRowItem.svelte';
 
@@ -16,7 +16,7 @@
   );
 
   // The word card links only Han characters, but a hand-typed URL can still name anything.
-  const isHan = $derived(hasCjk(char));
+  const isHan = $derived(Array.from(char).every(isCjkChar));
   const otherForms = $derived(table ? charVariants(char, table).filter((v) => v !== char) : []);
   const matches = $derived.by(() => {
     const t = table;
@@ -24,7 +24,12 @@
     if ((!t && !tableFailed) || !$liveWords) return null;
     return searchWords($liveWords, { query: char, sort: 'az', variants: t ? (c) => charVariants(c, t) : undefined });
   });
-  const wiktionaryUrl = $derived(`https://en.wiktionary.org/wiki/${encodeURIComponent(char)}#Vietnamese`);
+  // Wiktionary keeps Vietnamese entries on the traditional form (spec §6.4): 发 → 發.
+  const wikiTitle = $derived.by(() => {
+    const t = table;
+    return t ? Array.from(char).map((c) => toTraditional(c, t)).join('') : char;
+  });
+  const wiktionaryUrl = $derived(`https://en.wiktionary.org/wiki/${encodeURIComponent(wikiTitle)}#Vietnamese`);
 </script>
 
 <section class="stack">
@@ -62,8 +67,10 @@
 </section>
 
 <style>
+  section { overflow-wrap: anywhere; }
   .head { display: flex; align-items: center; gap: 20px; }
   .glyph { font-size: 72px; line-height: 1; font-weight: 400; }
   .meta { gap: 6px; }
-  .note { margin: 0; font-size: 14px; }
+  p { margin: 0; }
+  .note { font-size: 14px; }
 </style>
