@@ -36,3 +36,35 @@ describe('canonicalTone', () => {
     expect(canonicalTone('nhập khẩu')).toBe('nhập khẩu');
   });
 });
+
+describe('punctuation and mixed text', () => {
+  it('treats punctuation next to a syllable as a separator', () => {
+    expect(toneVariant('hoà,')).toBe('hòa,');
+    expect(toneVariant('(hoá)')).toBe('(hóa)');
+    expect(canonicalTone('hóa/thủy.')).toBe('hoá/thuỷ.');
+  });
+
+  it('is harmless on empty, CJK and English text', () => {
+    expect(canonicalTone('')).toBe('');
+    expect(canonicalTone('和平 hòa')).toBe('和平 hoà');
+    expect(canonicalTone('to import goods')).toBe('to import goods');
+  });
+});
+
+describe('round trips and edge cases', () => {
+  it('toneVariant is its own inverse and canonicalTone is idempotent', () => {
+    for (const w of ['văn hoá', 'thủy lợi', 'khỏe mạnh', 'hoá hóa']) {
+      const v = toneVariant(w);
+      if (v !== null) expect(toneVariant(v)).toBe(w);
+      expect(canonicalTone(canonicalTone(w))).toBe(canonicalTone(w));
+    }
+  });
+
+  it('accepts NFD input, uppercase and the other tone marks', () => {
+    expect(canonicalTone('hóa'.normalize('NFD'))).toBe('hoá');
+    expect(syllableVariants('QUÝ')).toEqual(['QUÝ']);
+    expect(syllableVariants('HOẠ')).toEqual(['HỌA', 'HOẠ']);
+    expect(syllableVariants('thuở')).toEqual(['thuở']);
+    expect(toneVariant('hoá hóa')).toBe('hóa hoá');
+  });
+});

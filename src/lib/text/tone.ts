@@ -4,6 +4,9 @@ import { nfc } from './normalize';
 const TONE = new RegExp(`[${String.fromCodePoint(0x0300, 0x0301, 0x0303, 0x0309, 0x0323)}]`);
 /** Syllables whose tone placement is ambiguous: …oa, …oe, …uy at the end. */
 const PAIR = /^(.*?)(o[ae]|uy)$/i;
+/** Runs of anything that is not a letter or combining mark: spaces, hyphens, punctuation, digits. */
+const SEPARATOR = /([^\p{L}\p{M}]+)/u;
+const IS_SEPARATOR = /^[^\p{L}\p{M}]*$/u;
 
 function splitTone(syllable: string): { base: string; tone: string | null } {
   const decomposed = syllable.normalize('NFD');
@@ -33,12 +36,12 @@ export function syllableVariants(syllable: string): string[] {
 
 function mapSyllables(word: string, pick: (variants: string[], original: string) => string): string {
   return nfc(word)
-    .split(/([\s-]+)/)
-    .map((part) => (/^[\s-]*$/.test(part) ? part : pick(syllableVariants(part), nfc(part))))
+    .split(SEPARATOR)
+    .map((part) => (IS_SEPARATOR.test(part) ? part : pick(syllableVariants(part), nfc(part))))
     .join('');
 }
 
-/** The same word with the other tone-mark placement, or null if nothing differs. */
+/** The same word with the other tone-mark placement, or null if nothing differs. Assumes Vietnamese input. */
 export function toneVariant(word: string): string | null {
   const swapped = mapSyllables(word, (variants, original) =>
     variants.length === 2 ? (variants[0] === original ? variants[1] : variants[0]) : original,
