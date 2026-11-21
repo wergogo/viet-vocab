@@ -1,5 +1,6 @@
 <script lang="ts">
   import { findOrCreateList } from '../../db/lists';
+  import { isSubmitEnter } from '../keys';
   import { liveLists } from '../stores';
 
   let { selected = $bindable() }: { selected: string[] } = $props();
@@ -52,7 +53,7 @@
       placeholder="New list name"
       aria-label="New list name"
       onkeydown={(e) => {
-        if (e.key === 'Enter') {
+        if (isSubmitEnter(e)) {
           e.preventDefault();
           add();
         }
