@@ -12,6 +12,11 @@ function requireName(name: string): string {
   return clean;
 }
 
+/** The key two live list names must not share: cleaned like storage (NFC, no zero-width characters, single spaces), ignoring case. */
+export function listNameKey(name: string): string {
+  return cleanText(name).toLocaleLowerCase('vi');
+}
+
 export async function createList(name: string): Promise<List> {
   const now = nowIso();
   const list: List = { id: newId(), name: requireName(name), createdAt: now, updatedAt: now };
@@ -23,10 +28,10 @@ export async function createList(name: string): Promise<List> {
 /** Returns the live list with this name (ignoring case), creating it if there is none. One transaction, so concurrent calls can't create duplicates. */
 export async function findOrCreateList(name: string): Promise<List> {
   const clean = requireName(name);
-  const key = clean.toLocaleLowerCase('vi');
+  const key = listNameKey(clean);
   const { list, created } = await db.transaction('rw', db.lists, async () => {
     const existing = (await db.lists.toArray()).find(
-      (l): l is List => isLive(l) && l.name.toLocaleLowerCase('vi') === key,
+      (l): l is List => isLive(l) && listNameKey(l.name) === key,
     );
     if (existing) return { list: existing, created: false };
     const now = nowIso();

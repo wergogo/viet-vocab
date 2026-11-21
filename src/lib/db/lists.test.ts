@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, resetDb } from './db';
-import { createList, deleteList, findOrCreateList, listLiveLists, renameList } from './lists';
+import { createList, deleteList, findOrCreateList, listLiveLists, listNameKey, renameList } from './lists';
 import { createWord, emptyDraft, getWord } from './words';
 import { expectDerivedFieldsFresh } from './test-utils';
 import { isDirty } from './dirty';
@@ -19,6 +19,16 @@ afterEach(() => {
 afterEach(expectDerivedFieldsFresh);
 
 describe('lists', () => {
+  it('treats spacing, Unicode form, zero-width characters and case as the same list name', async () => {
+    const list = await findOrCreateList('Kinh tế');
+    const variants = ['Kinh  tế', 'Kinh tế'.normalize('NFD'), `Kinh tế${String.fromCodePoint(0x200b)}`, 'KINH TẾ'];
+    for (const variant of variants) {
+      expect(listNameKey(variant)).toBe(listNameKey('Kinh tế'));
+      expect((await findOrCreateList(variant)).id).toBe(list.id);
+    }
+    expect(await listLiveLists()).toHaveLength(1);
+  });
+
   it('findOrCreateList ignores deleted lists and rejects empty names', async () => {
     const old = await findOrCreateList('Travel');
     await deleteList(old.id);
