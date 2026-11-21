@@ -10,8 +10,8 @@ describe('isLive / tombstone', () => {
   });
 
   it('builds tombstones with an optional wordId', () => {
-    expect(tombstone('b', 't2')).toEqual({ id: 'b', updatedAt: 't2', deleted: true });
-    expect(tombstone('c', 't3', 'w1')).toEqual({ id: 'c', updatedAt: 't3', deleted: true, wordId: 'w1' });
+    expect(tombstone('b', 't2')).toStrictEqual({ id: 'b', updatedAt: 't2', deleted: true });
+    expect(tombstone('c', 't3', 'w1')).toStrictEqual({ id: 'c', updatedAt: 't3', deleted: true, wordId: 'w1' });
   });
 
   it('has the spec defaults for review settings', () => {
