@@ -1,7 +1,7 @@
 import type { Sense, Syllable, Word } from '../model/types';
 import { isLive, tombstone } from '../model/types';
 import { newId, nextTimestamp, nowIso } from '../model/ids';
-import { cleanText } from '../text/normalize';
+import { cleanMultiline, cleanText } from '../text/normalize';
 import { rebuildSyllables } from '../text/syllables';
 import { db } from './db';
 import { fromRow, isLiveRow, toRow, type LiveWordRow } from './derive';
@@ -51,31 +51,33 @@ export function draftFromWord(w: Word): WordDraft {
   };
 }
 
-function optional(s: string | undefined): string | undefined {
-  const t = s?.trim();
+/** Cleaned text (zero-width characters removed, trimmed, NFC), or undefined when empty. */
+function optional(s: string | undefined, multiline = false): string | undefined {
+  if (s === undefined) return undefined;
+  const t = multiline ? cleanMultiline(s) : cleanText(s);
   return t ? t : undefined;
 }
 
 /** Cleans a draft into stored word fields. Throws if the word is empty. */
 export function normalizeDraft(d: WordDraft): WordFields {
   const word = cleanText(d.word);
-  if (!word) throw new Error('Word is required');
   const syllables = rebuildSyllables(word, d.syllables).map((s) => {
     const out: Syllable = { text: s.text };
-    const char = optional(s.char)?.normalize('NFC');
+    const char = optional(s.char);
     const gloss = optional(s.gloss);
     if (char) out.char = char;
     if (gloss) out.gloss = gloss;
     return out;
   });
+  if (!word || syllables.length === 0) throw new Error('Word is required');
   const senses: Sense[] = d.senses
-    .map((s) => ({ pos: s.pos.trim(), meaning: s.meaning.trim() }))
+    .map((s) => ({ pos: cleanText(s.pos), meaning: cleanText(s.meaning) }))
     .filter((s) => s.pos || s.meaning);
   const fields: WordFields = { word, syllables, senses, listIds: [...new Set(d.listIds)] };
   const ipaHanoi = optional(d.ipaHanoi);
   const ipaSaigon = optional(d.ipaSaigon);
-  const etymology = optional(d.etymology);
-  const notes = optional(d.notes);
+  const etymology = optional(d.etymology, true);
+  const notes = optional(d.notes, true);
   const audioFile = optional(d.audioFile);
   if (ipaHanoi) fields.ipaHanoi = ipaHanoi;
   if (ipaSaigon) fields.ipaSaigon = ipaSaigon;
@@ -101,26 +103,36 @@ export async function getWord(id: string): Promise<Word | undefined> {
   return isLive(record) ? record : undefined;
 }
 
+/** Saves an edit. Reads and writes in one transaction, so a concurrent delete can't be overwritten. */
 export async function updateWord(id: string, d: WordDraft): Promise<Word> {
-  const existing = await getWord(id);
-  if (!existing) throw new Error(`Word ${id} not found`);
-  const word: Word = { id, ...normalizeDraft(d), createdAt: existing.createdAt, updatedAt: nextTimestamp(existing.updatedAt) };
-  await db.words.put(toRow(word));
+  const fields = normalizeDraft(d);
+  const word = await db.transaction('rw', db.words, async () => {
+    const row = await db.words.get(id);
+    if (!row || !isLiveRow(row)) throw new Error(`Word ${id} not found`);
+    const next: Word = { id, ...fields, createdAt: row.createdAt, updatedAt: nextTimestamp(row.updatedAt) };
+    await db.words.put(toRow(next));
+    return next;
+  });
   markDirty();
   return word;
 }
 
-/** Tombstones the word and its review cards. */
+/**
+ * Tombstones the word and its review cards. Deleting an unknown id still records a tombstone
+ * (harmless for sync); deleting an already deleted word does nothing.
+ */
 export async function deleteWord(id: string): Promise<void> {
-  await db.transaction('rw', db.words, db.cards, async () => {
+  const changed = await db.transaction('rw', db.words, db.cards, async () => {
     const row = await db.words.get(id);
+    if (row && !isLiveRow(row)) return false;
     await db.words.put(tombstone(id, nextTimestamp(row?.updatedAt)));
     const cards = await db.cards.where('wordId').equals(id).toArray();
     await db.cards.bulkPut(
       cards.filter((c) => isLive(c)).map((c) => tombstone(c.id, nextTimestamp(c.updatedAt), id)),
     );
+    return true;
   });
-  markDirty();
+  if (changed) markDirty();
 }
 
 export async function listLiveWords(): Promise<LiveWordRow[]> {

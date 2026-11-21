@@ -13,6 +13,11 @@ export function cleanText(s: string): string {
   return nfc(s).replace(ZERO_WIDTH, '').trim().replace(/\s+/g, ' ');
 }
 
+/** Like cleanText but keeps line breaks: drop zero-width characters, normalize line endings, trim, NFC. */
+export function cleanMultiline(s: string): string {
+  return nfc(s).replace(ZERO_WIDTH, '').replace(/\r\n?/g, '\n').trim();
+}
+
 /** Remove all Vietnamese diacritics (tones and vowel marks) and map đ/Đ to d/D. */
 export function stripDiacritics(s: string): string {
   return s

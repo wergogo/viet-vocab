@@ -56,6 +56,20 @@ describe('normalizeDraft', () => {
 
   it('requires a word', () => {
     expect(() => normalizeDraft(emptyDraft('   '))).toThrow('Word is required');
+    expect(() => normalizeDraft(emptyDraft('-'))).toThrow('Word is required');
+  });
+
+  it('drops zero-width characters from every text field', () => {
+    const z = String.fromCodePoint(0x200b);
+    const result = normalizeDraft({
+      ...emptyDraft('nhập'),
+      syllables: [{ text: 'nhập', char: `入${z}`, gloss: z }],
+      senses: [{ pos: 'Verb', meaning: `im${z}port` }, { pos: '', meaning: z }],
+      notes: `line one${z}\nline two `,
+    });
+    expect(result.syllables).toEqual([{ text: 'nhập', char: '入' }]);
+    expect(result.senses).toEqual([{ pos: 'Verb', meaning: 'import' }]);
+    expect(result.notes).toBe('line one\nline two');
   });
 
   it('stores characters in NFC so compatibility ideographs match search', () => {
@@ -107,6 +121,23 @@ describe('updateWord', () => {
   it('fails for a missing word', async () => {
     await expect(updateWord('nope', draft())).rejects.toThrow('not found');
   });
+
+  it('refuses to update a deleted word', async () => {
+    const w = await createWord(draft());
+    await deleteWord(w.id);
+    await expect(updateWord(w.id, draft())).rejects.toThrow('not found');
+    expect(await getWord(w.id)).toBeUndefined();
+  });
+
+  it('marks sync dirty on update and delete', async () => {
+    const w = await createWord(draft());
+    localStorage.clear();
+    await updateWord(w.id, draft({ notes: 'x' }));
+    expect(isDirty()).toBe(true);
+    localStorage.clear();
+    await deleteWord(w.id);
+    expect(isDirty()).toBe(true);
+  });
 });
 
 describe('deleteWord', () => {
@@ -124,5 +155,18 @@ describe('deleteWord', () => {
       wordId: w.id,
     });
     expect(await listLiveWords()).toEqual([]);
+  });
+
+  it('is a no-op the second time and still records unknown ids', async () => {
+    const w = await createWord(draft());
+    vi.setSystemTime(new Date('2026-01-03T00:00:00.000Z'));
+    await deleteWord(w.id);
+    localStorage.clear();
+    vi.setSystemTime(new Date('2026-01-04T00:00:00.000Z'));
+    await deleteWord(w.id);
+    expect(await db.words.get(w.id)).toEqual({ id: w.id, updatedAt: '2026-01-03T00:00:00.000Z', deleted: true });
+    expect(isDirty()).toBe(false);
+    await deleteWord('unknown');
+    expect(await db.words.get('unknown')).toEqual({ id: 'unknown', updatedAt: '2026-01-04T00:00:00.000Z', deleted: true });
   });
 });

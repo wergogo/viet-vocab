@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanText, exactKey, hasDiacritics, looseKey, stripDiacritics, viCollator } from './normalize';
+import { cleanMultiline, cleanText, exactKey, hasDiacritics, looseKey, stripDiacritics, viCollator } from './normalize';
 
 describe('cleanText', () => {
   it('trims, collapses whitespace and composes to NFC', () => {
@@ -12,6 +12,13 @@ describe('cleanText', () => {
     const zwsp = String.fromCodePoint(0x200b);
     const bom = String.fromCodePoint(0xfeff);
     expect(cleanText(`${bom}nhập${zwsp} khẩu${zwsp}`)).toBe('nhập khẩu');
+  });
+});
+
+describe('cleanMultiline', () => {
+  it('keeps line breaks but drops zero-width characters and trims', () => {
+    const z = String.fromCodePoint(0x200b);
+    expect(cleanMultiline(` a${z} b\r\nc \n`)).toBe('a b\nc');
   });
 });
 
