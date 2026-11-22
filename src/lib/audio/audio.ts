@@ -5,9 +5,54 @@ export function commonsAudioUrl(file: string): string {
   return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file.replaceAll(' ', '_'))}`;
 }
 
-/** Plays a Commons recording. Rejects when it can't play (offline, missing file, blocked autoplay). */
+/** Media types of the audio files Commons hosts, by file extension. */
+const AUDIO_TYPES: Record<string, string> = {
+  ogg: 'audio/ogg',
+  oga: 'audio/ogg',
+  opus: 'audio/ogg; codecs=opus',
+  wav: 'audio/wav',
+  mp3: 'audio/mpeg',
+  flac: 'audio/flac',
+  webm: 'audio/webm',
+};
+
+// One player for every recording, so a second tap restarts the sound instead of playing over the first.
+let player: HTMLAudioElement | undefined;
+const audioElement = (): HTMLAudioElement => (player ??= new Audio());
+
+/**
+ * Whether this browser can play the file's type. iPhone Safari can't play Ogg, and many Commons recordings are Ogg,
+ * so the audio button checks first and uses the device voice within the same tap. Files of an unknown type are tried.
+ */
+export function canPlayRecording(
+  file: string,
+  canPlayType: (type: string) => string = (type) => audioElement().canPlayType(type),
+): boolean {
+  const extension = /\.([a-z\d]+)$/i.exec(file)?.[1]?.toLowerCase();
+  const type = extension ? AUDIO_TYPES[extension] : undefined;
+  return type === undefined || canPlayType(type) !== '';
+}
+
+/** Stops the recording or speech that is playing, so sounds never overlap. */
+function stopSound(): void {
+  player?.pause();
+  if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
+}
+
+/**
+ * Plays a Commons recording. Rejects when it can't play (offline, missing file, blocked autoplay). A play that a newer
+ * one interrupts resolves quietly: nothing failed, so the caller shouldn't fall back to the voice.
+ */
 export async function playRecording(file: string): Promise<void> {
-  await new Audio(commonsAudioUrl(file)).play();
+  stopSound();
+  const audio = audioElement();
+  audio.src = commonsAudioUrl(file);
+  try {
+    await audio.play();
+  } catch (e) {
+    if (e instanceof Error && e.name === 'AbortError') return;
+    throw e;
+  }
 }
 
 const VOICE_KEY = 'vv.audio.voice';
@@ -43,18 +88,25 @@ export function pickVoice<V extends { lang: string; voiceURI: string }>(
   return vietnamese.find((v) => v.voiceURI === savedUri) ?? vietnamese[0] ?? null;
 }
 
+/** When to read the voice list again, for browsers that fill it late without firing `voiceschanged`. */
+const VOICE_RETRIES_MS = [250, 1000, 3000];
+
 /** The device's Vietnamese voices. Browsers load voices asynchronously, so this updates on `voiceschanged`. */
 export const vietnameseVoices: Readable<SpeechSynthesisVoice[]> = readable<SpeechSynthesisVoice[]>([], (set) => {
   if (typeof speechSynthesis === 'undefined') return;
   const update = () => set(speechSynthesis.getVoices().filter(isVietnameseVoice));
   update();
   speechSynthesis.addEventListener('voiceschanged', update);
-  return () => speechSynthesis.removeEventListener('voiceschanged', update);
+  const retries = VOICE_RETRIES_MS.map((ms) => setTimeout(update, ms));
+  return () => {
+    speechSynthesis.removeEventListener('voiceschanged', update);
+    for (const id of retries) clearTimeout(id);
+  };
 });
 
-/** Speaks the text with the voice, interrupting anything still speaking. */
+/** Speaks the text with the voice, stopping any recording or speech still playing. */
 export function speak(text: string, voice: SpeechSynthesisVoice): void {
-  speechSynthesis.cancel();
+  stopSound();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.voice = voice;
   utterance.lang = voice.lang;
