@@ -1,16 +1,74 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  canPlayRecording,
-  commonsAudioUrl,
-  isVietnameseVoice,
-  pickVoice,
-  playRecording,
-  saveVoiceUri,
-  savedVoiceUri,
-  vietnameseVoices,
-} from './audio';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { canPlayRecording, commonsAudioUrl, isVietnameseVoice, pickVoice, saveVoiceUri, savedVoiceUri } from './audio';
 
 const voice = (voiceURI: string, lang: string) => ({ voiceURI, lang });
+// The module reads only lang and voiceURI and hands the voice to the (stubbed) utterance.
+const viVoice = voice('vi-1', 'vi-VN') as unknown as SpeechSynthesisVoice;
+
+/** A fresh copy of the module, so the shared player and the voice store start over in each test. */
+async function freshAudio() {
+  vi.resetModules();
+  return import('./audio');
+}
+
+/**
+ * Stand-ins for the audio element and speech, like iPhone Safari (no Ogg), logging what the module does. A recording
+ * named `missing…` fails to load a moment later, one named `slow…` keeps loading, and any other plays.
+ */
+function stubSound() {
+  const log: string[] = [];
+  let voices: ReturnType<typeof voice>[] = [];
+  let interrupt = () => {};
+  vi.stubGlobal(
+    'Audio',
+    class {
+      src = '';
+      canPlayType(type: string) {
+        return type.startsWith('audio/ogg') ? '' : 'maybe';
+      }
+      pause() {
+        log.push('pause');
+        interrupt();
+      }
+      play() {
+        const file = this.src.split('/').pop()!;
+        log.push(`play ${file}`);
+        return new Promise<void>((resolve, reject) => {
+          interrupt = () => reject(new DOMException('The play() request was interrupted', 'AbortError'));
+          if (file.startsWith('missing')) setTimeout(() => reject(new DOMException('No supported source', 'NotSupportedError')));
+          else if (!file.startsWith('slow')) resolve();
+        });
+      }
+    },
+  );
+  vi.stubGlobal(
+    'SpeechSynthesisUtterance',
+    class {
+      text: string;
+      voice: unknown = null;
+      lang = '';
+      constructor(text: string) {
+        this.text = text;
+      }
+    },
+  );
+  const synth = Object.assign(new EventTarget(), {
+    getVoices: () => voices,
+    speak: (utterance: { text: string }) => log.push(`speak ${utterance.text}`.trim()),
+    cancel: () => log.push('cancel'),
+  });
+  vi.stubGlobal('speechSynthesis', synth);
+  return {
+    log,
+    setVoices: (next: ReturnType<typeof voice>[]) => {
+      voices = next;
+    },
+    fireVoicesChanged: () => synth.dispatchEvent(new Event('voiceschanged')),
+  };
+}
+
+/** The log entries that make a sound. */
+const sounds = (log: string[]) => log.filter((entry) => entry.startsWith('speak') || entry.startsWith('play'));
 
 beforeEach(() => {
   localStorage.clear();
@@ -19,6 +77,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe('commonsAudioUrl', () => {
@@ -49,27 +108,56 @@ describe('canPlayRecording', () => {
 
 describe('playRecording', () => {
   it('lets a newer recording interrupt the one playing, and rejects on real failures', async () => {
-    let interrupt = () => {};
-    vi.stubGlobal(
-      'Audio',
-      class {
-        src = '';
-        pause() {
-          interrupt();
-        }
-        play() {
-          return new Promise<void>((resolve, reject) => {
-            interrupt = () => reject(new DOMException('The play() request was interrupted', 'AbortError'));
-            if (this.src.endsWith('missing.wav')) reject(new DOMException('No supported source', 'NotSupportedError'));
-            if (this.src.endsWith('b.wav')) resolve();
-          });
-        }
-      },
-    );
-    const first = playRecording('a.wav');
+    stubSound();
+    const { playRecording } = await freshAudio();
+    const first = playRecording('slow.wav');
     await playRecording('b.wav');
     await expect(first).resolves.toBeUndefined();
     await expect(playRecording('missing.wav')).rejects.toThrow('No supported source');
+  });
+
+  it('stops speech before playing, and speech stops the recording', async () => {
+    const { log } = stubSound();
+    const { playRecording, speak } = await freshAudio();
+    const loading = playRecording('slow.wav');
+    speak('nước', viVoice);
+    await expect(loading).resolves.toBeUndefined();
+    expect(log).toEqual(['cancel', 'play slow.wav', 'pause', 'cancel', 'speak nước']);
+  });
+});
+
+describe('pronounce', () => {
+  it('speaks within the tap when no recording can play here', async () => {
+    const { log } = stubSound();
+    const { pronounce } = await freshAudio();
+    const heard = pronounce('nước', 'Hà Nội.ogg', viVoice);
+    // Spoken before the tap's handler returns (iOS ignores speech started later), and the file isn't tried.
+    expect(sounds(log)).toEqual(['speak nước']);
+    await expect(heard).resolves.toBe('voice');
+    await expect(pronounce('nước', undefined, viVoice)).resolves.toBe('voice');
+    await expect(pronounce('nước', undefined, null)).resolves.toBe('silent');
+  });
+
+  it('unlocks speech within the tap, then plays the recording', async () => {
+    const { log } = stubSound();
+    const { pronounce } = await freshAudio();
+    const first = pronounce('nước', 'slow.wav', viVoice);
+    // The empty utterance, started during the tap, lets a later fallback speak on iOS.
+    expect(sounds(log)).toEqual(['speak', 'play slow.wav']);
+    await expect(pronounce('nước', 'a.wav', viVoice)).resolves.toBe('recording');
+    // Interrupted, not failed: no voice over the newer recording.
+    await expect(first).resolves.toBe('recording');
+    expect(sounds(log)).toEqual(['speak', 'play slow.wav', 'speak', 'play a.wav']);
+  });
+
+  it('speaks instead of a recording that fails, or reports silence without a voice', async () => {
+    const { log } = stubSound();
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { pronounce } = await freshAudio();
+    await expect(pronounce('nước', 'missing.wav', viVoice)).resolves.toBe('voice-instead');
+    expect(sounds(log)).toEqual(['speak', 'play missing.wav', 'speak nước']);
+    await expect(pronounce('nước', 'missing.wav', null)).resolves.toBe('silent');
+    expect(logged).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -97,36 +185,24 @@ describe('voices', () => {
 });
 
 describe('vietnameseVoices', () => {
-  /** A speechSynthesis stand-in whose voice list the test fills in later, as browsers do. */
-  function stubSpeech() {
-    let list: ReturnType<typeof voice>[] = [];
-    const synth = Object.assign(new EventTarget(), { getVoices: () => list, cancel: () => {} });
-    vi.stubGlobal('speechSynthesis', synth);
-    return {
-      setVoices: (next: ReturnType<typeof voice>[]) => {
-        list = next;
-      },
-      fireVoicesChanged: () => synth.dispatchEvent(new Event('voiceschanged')),
-    };
-  }
-
-  it('updates on voiceschanged, and again later for browsers that never fire it', () => {
-    vi.useFakeTimers();
-    const speech = stubSpeech();
+  it('updates on voiceschanged, and again later for browsers that never fire it', async () => {
+    const speech = stubSound();
+    const { vietnameseVoices } = await freshAudio();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const seen: string[][] = [];
-    const stop = vietnameseVoices.subscribe((list) => seen.push(list.map((v) => v.voiceURI)));
+    onTestFinished(vietnameseVoices.subscribe((list) => seen.push(list.map((v) => v.voiceURI))));
     speech.setVoices([voice('en', 'en-US'), voice('vi-1', 'vi-VN')]);
     speech.fireVoicesChanged();
     expect(seen).toEqual([[], ['vi-1']]);
     speech.setVoices([voice('en', 'en-US'), voice('vi-1', 'vi-VN'), voice('vi-2', 'vi-VN')]);
     vi.advanceTimersByTime(3000);
     expect(seen.at(-1)).toEqual(['vi-1', 'vi-2']);
-    stop();
   });
 
-  it('stops listening and clears its retries when unsubscribed', () => {
-    vi.useFakeTimers();
-    const speech = stubSpeech();
+  it('stops listening and clears its retries when unsubscribed', async () => {
+    const speech = stubSound();
+    const { vietnameseVoices } = await freshAudio();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const seen: string[][] = [];
     const stop = vietnameseVoices.subscribe((list) => seen.push(list.map((v) => v.voiceURI)));
     stop();

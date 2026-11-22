@@ -1,31 +1,29 @@
 <script lang="ts">
-  import { canPlayRecording, pickVoice, playRecording, savedVoiceUri, speak, vietnameseVoices } from '../../audio/audio';
+  import { canPlayRecording, pickVoice, pronounce, savedVoiceUri, vietnameseVoices } from '../../audio/audio';
 
-  let { text, audioFile }: { text: string; audioFile?: string } = $props();
+  // `recordingOnly` (the form's Recording row) never puts the device voice in place of the file.
+  let { text, audioFile, recordingOnly = false }: { text: string; audioFile?: string; recordingOnly?: boolean } =
+    $props();
 
+  const uid = $props.id();
   let problem = $state('');
-  const voice = $derived(pickVoice($vietnameseVoices, savedVoiceUri()));
-  // A recording this browser can't play (Ogg on iPhone) counts as none, so the tap speaks straight away:
-  // iOS ignores speech that starts after the tap has been handled.
-  const recording = $derived(audioFile && canPlayRecording(audioFile) ? audioFile : undefined);
-  const available = $derived(recording !== undefined || voice !== null);
+  const voice = $derived(recordingOnly ? null : pickVoice($vietnameseVoices, savedVoiceUri()));
+  // Ogg can't play on iPhone; then pronounce() speaks within the tap instead.
+  const playable = $derived(audioFile ? canPlayRecording(audioFile) : false);
+  const available = $derived(playable || voice !== null);
+  const unavailable = $derived(
+    recordingOnly
+      ? "This device can't play this file type"
+      : audioFile
+        ? "This device can't play the recording and has no Vietnamese voice"
+        : 'No Vietnamese voice on this device',
+  );
 
-  // Spec §9: the Wiktionary recording when there is one, otherwise the device's Vietnamese voice.
   async function play() {
     problem = '';
-    if (recording) {
-      try {
-        await playRecording(recording);
-        return;
-      } catch (e) {
-        console.error(e);
-        if (!voice) {
-          problem = "Couldn't play the recording.";
-          return;
-        }
-      }
-    }
-    if (voice) speak(text, voice);
+    const heard = await pronounce(text, audioFile, voice);
+    if (heard === 'voice-instead') problem = "Couldn't play the recording, so this is the device voice.";
+    else if (heard === 'silent') problem = "Couldn't play the recording.";
   }
 </script>
 
@@ -36,18 +34,18 @@
     onclick={play}
     disabled={!available}
     aria-label={`Play “${text}”`}
-    title={recording ? 'Play the recording' : "Read aloud with this device's voice"}>🔊</button
+    aria-describedby={available ? undefined : `${uid}-hint`}
+    title={available ? (playable ? 'Play the recording' : "Read aloud with this device's voice") : unavailable}
+    >🔊</button
   >
-  {#if !available}
-    <span class="muted hint">
-      {audioFile ? "This device can't play the recording and has no Vietnamese voice" : 'No Vietnamese voice on this device'}
-    </span>
-  {/if}
-  {#if problem}<span class="muted hint" role="status">{problem}</span>{/if}
+  {#if !available}<span class="muted hint" id={`${uid}-hint`}>{unavailable}</span>{/if}
+  <!-- Mounted while empty, so screen readers announce the message when it appears. -->
+  <span class="problem" class:notice={problem !== ''} role="status">{problem}</span>
 </span>
 
 <style>
   .audio { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .play { min-width: 44px; min-height: 44px; padding: 6px 10px; font-size: 20px; }
   .hint { font-size: 13px; }
+  .problem { font-size: 14px; }
 </style>

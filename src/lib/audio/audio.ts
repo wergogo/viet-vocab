@@ -22,7 +22,7 @@ const audioElement = (): HTMLAudioElement => (player ??= new Audio());
 
 /**
  * Whether this browser can play the file's type. iPhone Safari can't play Ogg, and many Commons recordings are Ogg,
- * so the audio button checks first and uses the device voice within the same tap. Files of an unknown type are tried.
+ * so `pronounce` checks first and uses the device voice within the same tap. Files of an unknown type are tried.
  */
 export function canPlayRecording(
   file: string,
@@ -94,12 +94,13 @@ const VOICE_RETRIES_MS = [250, 1000, 3000];
 /** The device's Vietnamese voices. Browsers load voices asynchronously, so this updates on `voiceschanged`. */
 export const vietnameseVoices: Readable<SpeechSynthesisVoice[]> = readable<SpeechSynthesisVoice[]>([], (set) => {
   if (typeof speechSynthesis === 'undefined') return;
-  const update = () => set(speechSynthesis.getVoices().filter(isVietnameseVoice));
+  const synth = speechSynthesis;
+  const update = () => set(synth.getVoices().filter(isVietnameseVoice));
   update();
-  speechSynthesis.addEventListener('voiceschanged', update);
+  synth.addEventListener('voiceschanged', update);
   const retries = VOICE_RETRIES_MS.map((ms) => setTimeout(update, ms));
   return () => {
-    speechSynthesis.removeEventListener('voiceschanged', update);
+    synth.removeEventListener('voiceschanged', update);
     for (const id of retries) clearTimeout(id);
   };
 });
@@ -111,4 +112,38 @@ export function speak(text: string, voice: SpeechSynthesisVoice): void {
   utterance.voice = voice;
   utterance.lang = voice.lang;
   speechSynthesis.speak(utterance);
+}
+
+/**
+ * What `pronounce` did: played the recording, spoke because no recording could play here, spoke instead of a recording
+ * that failed, or nothing could be heard.
+ */
+export type Pronounced = 'recording' | 'voice' | 'voice-instead' | 'silent';
+
+/**
+ * Spec §9: the recording when this browser can play it, otherwise the voice, which also stands in for a recording that
+ * fails (offline, missing file). Call it straight from a tap: iOS only starts speech inside a tap until speech has
+ * started inside one, so it starts an empty utterance before the recording loads, and the fallback can still be heard
+ * when the failure arrives later. Pass a null voice to only ever play the recording.
+ */
+export async function pronounce(
+  text: string,
+  audioFile: string | undefined,
+  voice: SpeechSynthesisVoice | null,
+): Promise<Pronounced> {
+  if (!audioFile || !canPlayRecording(audioFile)) {
+    if (!voice) return 'silent';
+    speak(text, voice);
+    return 'voice';
+  }
+  if (voice) speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+  try {
+    await playRecording(audioFile);
+    return 'recording';
+  } catch (e) {
+    console.error(e);
+    if (!voice) return 'silent';
+    speak(text, voice);
+    return 'voice-instead';
+  }
 }
