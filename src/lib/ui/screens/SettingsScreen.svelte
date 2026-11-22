@@ -132,20 +132,23 @@
     <h2>Audio (this device)</h2>
     {#if voice}
       <label class="field">
-        <span>Vietnamese voice for words without a recording</span>
+        <span>Vietnamese voice for words without a recording this browser can play</span>
         <select value={voice.voiceURI} onchange={(e) => chooseVoice(e.currentTarget.value)}>
           {#each $vietnameseVoices as v (v.voiceURI)}
             <option value={v.voiceURI}>{v.name} ({v.lang})</option>
           {/each}
         </select>
       </label>
+      {#if voiceUri !== null && voice.voiceURI !== voiceUri}
+        <p class="muted">The voice you chose isn't available in this browser right now, so this one is used.</p>
+      {/if}
       <div class="row">
         <button type="button" onclick={testVoice}>Test voice</button>
       </div>
     {:else}
       <p class="muted">
-        This device has no Vietnamese text-to-speech voice, so words without a recording can't be read aloud.
-        Recordings from Wiktionary still play.
+        This browser offers no Vietnamese text-to-speech voice, so words without a recording it can play can't be read
+        aloud here.
       </p>
     {/if}
   </section>

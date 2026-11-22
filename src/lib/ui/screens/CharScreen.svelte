@@ -151,7 +151,7 @@
     {:else}
       <p class="muted note">✓ marks words you've saved (tap to open); tap any other to add it with a lookup.</p>
       <ul class="plain-list compounds">
-        <!-- Keyed by position: han + word isn't guaranteed to be unique. -->
+        <!-- Keyed by position: the list is only ever replaced whole, and a key built from han + word could collide. -->
         {#each info.compounds as compound, i (i)}
           {@const saved = findDuplicates($liveWords ?? [], compound.word)[0]}
           <li>

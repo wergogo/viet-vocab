@@ -91,11 +91,24 @@ export function pickVoice<V extends { lang: string; voiceURI: string }>(
 /** When to read the voice list again, for browsers that fill it late without firing `voiceschanged`. */
 const VOICE_RETRIES_MS = [250, 1000, 3000];
 
-/** The device's Vietnamese voices. Browsers load voices asynchronously, so this updates on `voiceschanged`. */
+/** The first voice per voiceURI: browsers don't promise unique URIs, and iOS lists some voices twice. */
+function firstPerUri<V extends { voiceURI: string }>(voices: readonly V[]): V[] {
+  const seen = new Set<string>();
+  return voices.filter((v) => {
+    if (seen.has(v.voiceURI)) return false;
+    seen.add(v.voiceURI);
+    return true;
+  });
+}
+
+/**
+ * The browser's Vietnamese voices, one per voiceURI. Browsers load voices asynchronously, so this updates on
+ * `voiceschanged`.
+ */
 export const vietnameseVoices: Readable<SpeechSynthesisVoice[]> = readable<SpeechSynthesisVoice[]>([], (set) => {
   if (typeof speechSynthesis === 'undefined') return;
   const synth = speechSynthesis;
-  const update = () => set(synth.getVoices().filter(isVietnameseVoice));
+  const update = () => set(firstPerUri(synth.getVoices().filter(isVietnameseVoice)));
   update();
   synth.addEventListener('voiceschanged', update);
   const retries = VOICE_RETRIES_MS.map((ms) => setTimeout(update, ms));

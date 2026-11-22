@@ -201,6 +201,15 @@ describe('vietnameseVoices', () => {
     expect(seen.at(-1)).toEqual(['vi-1', 'vi-2']);
   });
 
+  it('lists a voice once when the browser lists it twice', async () => {
+    const speech = stubSound();
+    const { vietnameseVoices } = await freshAudio();
+    speech.setVoices([voice('vi-1', 'vi-VN'), voice('vi-1', 'vi-VN'), voice('vi-2', 'vi-VN')]);
+    const seen: string[][] = [];
+    onTestFinished(vietnameseVoices.subscribe((list) => seen.push(list.map((v) => v.voiceURI))));
+    expect(seen).toEqual([['vi-1', 'vi-2']]);
+  });
+
   it('stops listening and clears its retries when unsubscribed', async () => {
     const speech = stubSound();
     const { vietnameseVoices } = await freshAudio();

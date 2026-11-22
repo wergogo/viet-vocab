@@ -11,12 +11,13 @@
   // Ogg can't play on iPhone; then pronounce() speaks within the tap instead.
   const playable = $derived(audioFile ? canPlayRecording(audioFile) : false);
   const available = $derived(playable || voice !== null);
+  // Voices and playable formats differ between browsers on the same device, so the hints name the browser.
   const unavailable = $derived(
     recordingOnly
-      ? "This device can't play this file type"
+      ? "This browser can't play this file type"
       : audioFile
-        ? "This device can't play the recording and has no Vietnamese voice"
-        : 'No Vietnamese voice on this device',
+        ? "This browser can't play the recording and has no Vietnamese voice"
+        : 'No Vietnamese voice in this browser',
   );
 
   async function play() {
