@@ -1,15 +1,25 @@
 <script lang="ts">
+  import { RecordNotFoundError } from '../../db/errors';
   import { listLiveLists } from '../../db/lists';
   import { findDuplicates } from '../../db/search';
   import { createWord, draftFromWord, emptyDraft, getWord, updateWord, type WordDraft } from '../../db/words';
   import { rebuildSyllables } from '../../text/syllables';
+  import { applyEntry, applyIpaOnly, sameLookupWord } from '../../wiktionary/apply';
+  import { lookupWord } from '../../wiktionary/lookup';
+  import type { LookupResult } from '../../wiktionary/types';
   import { href, navigate } from '../router';
   import { liveWords } from '../stores';
+  import AudioButton from '../components/AudioButton.svelte';
   import ListPicker from '../components/ListPicker.svelte';
+  import LookupPanel from '../components/LookupPanel.svelte';
   import SensesEditor from '../components/SensesEditor.svelte';
   import SyllableEditor from '../components/SyllableEditor.svelte';
 
-  let { initialWord = '', editId }: { initialWord?: string; editId?: string } = $props();
+  let {
+    initialWord = '',
+    editId,
+    autoLookup = false,
+  }: { initialWord?: string; editId?: string; autoLookup?: boolean } = $props();
 
   // Props are constant per instance: App.svelte remounts this screen per route via {#key}.
   // svelte-ignore state_referenced_locally
@@ -20,14 +30,29 @@
   let loadError = $state('');
   let saving = $state(false);
 
+  let lookupStatus = $state<'idle' | 'loading' | 'error'>('idle');
+  let lookupError = $state('');
+  let lookupResult = $state<LookupResult | null>(null);
+  let chosenEntry = $state(0);
+  let pairingNote = $state<string | null>(null);
+  /** The word the lookup, source and recording belong to. */
+  let sourceWord = $state('');
+  let lookupRun = 0;
+  /** The draft before the lookup filled it. Entries fall back to it, so switching etymologies never mixes them. */
+  let lookupBase: WordDraft | null = null;
+
   $effect(() => {
     if (editId === undefined) return;
     let cancelled = false;
     getWord(editId)
       .then((w) => {
         if (cancelled) return;
-        if (w) draft = draftFromWord(w);
-        else loadError = "This word was deleted or doesn't exist.";
+        if (w) {
+          draft = draftFromWord(w);
+          sourceWord = w.word;
+        } else {
+          loadError = "This word was deleted or doesn't exist.";
+        }
       })
       .catch((e: unknown) => {
         if (!cancelled) loadError = e instanceof Error ? e.message : String(e);
@@ -42,10 +67,68 @@
 
   const duplicates = $derived(findDuplicates($liveWords ?? [], draft.word, editId));
 
+  /** Drops the lookup and the source and recording it filled in; an in-flight lookup is ignored. */
+  function forgetLookup() {
+    lookupRun++;
+    lookupBase = null;
+    lookupResult = null;
+    lookupStatus = 'idle';
+    lookupError = '';
+    pairingNote = null;
+    draft.source = undefined;
+    draft.audioFile = undefined;
+  }
+
   function onWordInput(event: Event) {
     const value = (event.currentTarget as HTMLInputElement).value;
     draft.word = value;
     draft.syllables = rebuildSyllables(value, draft.syllables);
+    // A lookup belongs to one word: retyping it as a different word (not just another tone placement or case)
+    // drops the page link and the recording, so the card can't point at the old page.
+    const fromLookup = lookupResult !== null || lookupStatus !== 'idle' || draft.source || draft.audioFile;
+    if (fromLookup && !sameLookupWord(value, sourceWord)) forgetLookup();
+  }
+
+  function fill(result: LookupResult, index: number) {
+    const plain = $state.snapshot(draft);
+    const entry = result.entries[index];
+    if (entry) {
+      const applied = applyEntry(plain, result, entry, lookupBase ?? plain);
+      draft = applied.draft;
+      pairingNote = applied.note;
+    } else {
+      draft = applyIpaOnly(plain, result);
+      pairingNote = null;
+    }
+  }
+
+  async function runLookup(refresh = false) {
+    const run = ++lookupRun;
+    sourceWord = draft.word;
+    lookupStatus = 'loading';
+    lookupError = '';
+    try {
+      const result = await lookupWord(draft.word, { refresh });
+      if (run !== lookupRun) return;
+      lookupResult = result;
+      chosenEntry = 0;
+      // The draft from before the first lookup stays the base. Taking it again on Refresh would start from fields
+      // the last fill set, and etymologies would mix again.
+      lookupBase ??= $state.snapshot(draft);
+      fill(result, 0);
+      lookupStatus = 'idle';
+    } catch (e) {
+      if (run !== lookupRun) return;
+      console.error(e);
+      lookupError = e instanceof Error ? e.message : String(e);
+      lookupStatus = 'error';
+    }
+  }
+
+  function chooseEntry(index: number) {
+    if (!lookupResult) return;
+    chosenEntry = index;
+    fill(lookupResult, index);
   }
 
   async function save(event: SubmitEvent) {
@@ -59,12 +142,20 @@
       const saved = editId === undefined ? await createWord(plain) : await updateWord(editId, plain);
       navigate({ name: 'word', id: saved.id });
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      error = / not found$/.test(message) ? "This word was deleted, so the changes can't be saved." : message;
+      error =
+        e instanceof RecordNotFoundError
+          ? "This word was deleted, so the changes can't be saved."
+          : e instanceof Error
+            ? e.message
+            : String(e);
     } finally {
       saving = false;
     }
   }
+
+  // A compound tapped on a character page opens Add with the word already looked up (spec §5.4).
+  // svelte-ignore state_referenced_locally
+  if (autoLookup && editId === undefined && initialWord.trim()) void runLookup();
 </script>
 
 {#if !loaded}
@@ -92,6 +183,18 @@
       />
     </label>
 
+    <LookupPanel
+      word={draft.word}
+      status={lookupStatus}
+      error={lookupError}
+      result={lookupResult}
+      chosen={chosenEntry}
+      note={pairingNote}
+      onlookup={() => runLookup()}
+      onrefresh={() => runLookup(true)}
+      onchoose={chooseEntry}
+    />
+
     {#if duplicates.length > 0}
       <p class="notice" role="status">
         Already saved:
@@ -112,6 +215,15 @@
         <input class="ipa" bind:value={draft.ipaSaigon} placeholder="[ɲəp̚˨˩˨ kʰəw˨˩˦]" autocomplete="off" />
       </label>
     </div>
+
+    {#if draft.audioFile}
+      <div class="row recording">
+        <span class="muted">Recording</span>
+        <span class="file">{draft.audioFile}</span>
+        <AudioButton text={draft.word} audioFile={draft.audioFile} recordingOnly />
+        <button type="button" onclick={() => (draft.audioFile = undefined)}>Remove</button>
+      </div>
+    {/if}
 
     <SensesEditor bind:senses={draft.senses} />
 
@@ -139,5 +251,7 @@
 <style>
   .ipa-row { flex-wrap: wrap; align-items: stretch; }
   .ipa-row .field { flex: 1 1 220px; }
+  .recording { flex-wrap: wrap; }
+  .file { flex: 1 1 160px; font-size: 14px; overflow-wrap: anywhere; }
   .actions { justify-content: space-between; }
 </style>
