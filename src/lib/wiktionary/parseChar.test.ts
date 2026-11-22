@@ -63,6 +63,17 @@ describe('parseCharPage', () => {
     expect(parseCharPage('x', page)?.meanings).toEqual(meaning ? [meaning] : []);
   });
 
+  it('reads vi-l-lite compounds and the first spelling of slash-joined ones (學)', () => {
+    const hoc = (FIXTURES['char-hoc'] as { parse: { title: string; wikitext: string } }).parse;
+    const info = parseCharPage(hoc.title, hoc.wikitext)!;
+    expect(info).toMatchObject({ hanViet: ['học'], nom: ['học', 'hục'] });
+    expect(info.meanings[0]).toBe('to learn, to study');
+    expect(info.compounds).toContainEqual({ han: '大學', word: 'đại học' });
+    expect(info.compounds).toContainEqual({ han: '學區', word: 'học khu' });
+    expect(info.compounds.length).toBeGreaterThan(100);
+    expect(info.compounds.every((c) => !c.word.includes('/'))).toBe(true);
+  });
+
   it('unlinks compounds written with links', () => {
     const text = '==Vietnamese==\n===Han character===\n# x\n====Compounds====\n* {{vi-l|[[入口]]|[[nhập khẩu]]}}\n';
     expect(parseCharPage('入', text)?.compounds).toEqual([{ han: '入口', word: 'nhập khẩu' }]);

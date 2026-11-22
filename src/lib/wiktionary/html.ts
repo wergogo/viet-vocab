@@ -60,14 +60,10 @@ export function definitionsOf(list: Element): string[] {
       .filter((c) => c.tagName === 'LI')
       .map(plainText);
     const parts = [plainText(li), ...subs].filter(Boolean);
-    // Joined parts drop their own final "." or ";", so a row doesn't read "a child.; a young animal".
-    const row =
-      parts.length > 1
-        ? parts
-            .map((p) => p.replace(/[.;]+$/, '').trim())
-            .filter(Boolean)
-            .join('; ')
-        : (parts[0] ?? '');
+    // Joined parts drop their own final "." or ";", so a row doesn't read "a child.; a young animal". A part that is
+    // only punctuation disappears; when one part is left it keeps its punctuation, like any single-part row.
+    const stripped = parts.map((p) => p.replace(/[.;]+$/, '').trim()).filter(Boolean);
+    const row = stripped.length > 1 ? stripped.join('; ') : (parts.find((p) => p.replace(/[.;]+$/, '').trim()) ?? '');
     if (row) rows.push(row);
   }
   return rows;

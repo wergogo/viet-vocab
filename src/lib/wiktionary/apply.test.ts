@@ -59,6 +59,53 @@ describe('applyEntry', () => {
   });
 });
 
+describe('applyEntry with a base (spec §6.5: fill what was found)', () => {
+  it('keeps typed values where the entry has none', () => {
+    const result = resultFor('nhap-khau');
+    const bare = { ...result.entries[0]!, chars: null, senses: [], etymology: '', ipaHanoi: '', ipaSaigon: '', audioFile: undefined };
+    const typed = {
+      ...emptyDraft('nhập khẩu'),
+      etymology: 'mine',
+      ipaHanoi: '[h]',
+      ipaSaigon: '[s]',
+      audioFile: 'x.ogg',
+      syllables: [{ text: 'nhập', char: '入', gloss: 'enter' }, { text: 'khẩu' }],
+      senses: [{ pos: 'Verb', meaning: 'typed' }],
+    };
+    const { draft } = applyEntry(typed, result, bare, typed);
+    expect(draft).toMatchObject({ etymology: 'mine', ipaHanoi: '[h]', ipaSaigon: '[s]', audioFile: 'x.ogg' });
+    expect(draft.senses).toEqual([{ pos: 'Verb', meaning: 'typed' }]);
+    expect(draft.syllables).toEqual(typed.syllables);
+  });
+
+  it("switches etymologies from one base, so one entry's values never stay in another", () => {
+    const result = resultFor('dong');
+    const base = emptyDraft('đồng');
+    const first = applyEntry(base, result, result.entries[0]!, base).draft;
+    expect(first.etymology).not.toBe('');
+    const switched = applyEntry(first, result, { ...result.entries[2]!, etymology: '' }, base).draft;
+    expect(switched.etymology).toBe('');
+    expect(switched.syllables).toEqual([{ text: 'đồng', char: '銅', gloss: 'copper' }]);
+  });
+
+  it('keeps typed glosses when the entry only has whole-word characters', () => {
+    const result = resultFor('nhap-khau');
+    const typed = { ...emptyDraft('nhập khẩu'), syllables: [{ text: 'nhập', gloss: 'to enter' }, { text: 'khẩu' }] };
+    expect(applyEntry(typed, result, result.entries[0]!, typed).draft.syllables).toEqual([
+      { text: 'nhập', char: '入', gloss: 'to enter' },
+      { text: 'khẩu', char: '口' },
+    ]);
+  });
+
+  it('keeps typed characters when the found ones cannot be paired', () => {
+    const result = resultFor('nhap-khau');
+    const typed = { ...emptyDraft('xuất nhập khẩu'), syllables: [{ text: 'xuất', char: '出' }, { text: 'nhập' }, { text: 'khẩu' }] };
+    const applied = applyEntry(typed, result, result.entries[0]!, typed);
+    expect(applied.draft.syllables).toEqual(typed.syllables);
+    expect(applied.note).toContain('fill in by hand');
+  });
+});
+
 describe('applyIpaOnly', () => {
   it('fills IPA and keeps typed IPA where the lookup has none', () => {
     const result: LookupResult = { query: 'x', title: null, entries: [], ipaHanoi: '[a]', ipaSaigon: '', fetchedAt: FETCHED };

@@ -60,6 +60,7 @@ describe('response readers', () => {
 
   it('reads existing titles and expanded wikitext', () => {
     expect(existingTitles(FIXTURES['query-variants'])).toEqual(new Set(['văn hoá']));
+    expect(() => existingTitles(FIXTURES['missing-page'])).toThrow(LookupError);
     expect(readExpanded(FIXTURES['ipa-sentence'])).toContain('usage-label-accent');
     expect(() => readExpanded({})).toThrow(LookupError);
   });

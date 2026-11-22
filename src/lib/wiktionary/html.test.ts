@@ -113,6 +113,6 @@ describe('HTML shapes', () => {
       '<ol><li>a child.<ol><li>a young animal.</li><li>a puppet</li></ol></li><li>only.</li><li>parent.<ol><li>.</li></ol></li></ol>',
       'text/html',
     );
-    expect(definitionsOf(doc.body.firstElementChild!)).toEqual(['a child; a young animal; a puppet', 'only.', 'parent']);
+    expect(definitionsOf(doc.body.firstElementChild!)).toEqual(['a child; a young animal; a puppet', 'only.', 'parent.']);
   });
 });

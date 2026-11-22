@@ -84,6 +84,13 @@ describe('wikiToText', () => {
     expect(wikiToText('one<br>two<br />three</br>four')).toBe('one two three four');
   });
 
+  it('stays fast and safe on deeply nested templates', () => {
+    const started = performance.now();
+    expect(() => wikiToText(`${'{{l|en|'.repeat(5_000)}x${'}}'.repeat(5_000)}`)).not.toThrow();
+    findTemplates(`${'{{a|'.repeat(5_000)}${'}}'.repeat(5_000)}`, 'vi-l');
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
   it('stops scanning after many unclosed "{{" instead of slowing down', () => {
     const started = performance.now();
     findTemplates(`${'{{ '.repeat(20_000)}{{vi-l|入口|nhập khẩu}}`, 'vi-l');

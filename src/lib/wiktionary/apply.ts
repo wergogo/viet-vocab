@@ -13,20 +13,29 @@ export interface AppliedEntry {
 
 /**
  * Fills the fields a lookup owns from one entry: characters and glosses, meanings, etymology, IPA, audio and
- * source. The word, notes and lists stay as they are. Nothing is saved until Save (spec §5.2).
+ * source. A field the entry has no value for keeps the value in `base` (spec §6.5: a partial parse fills what it
+ * found), so what the user typed survives. The form passes the draft as it was before the lookup as `base`, so
+ * switching etymologies never leaves one entry's values in another. The word, notes and lists always come from
+ * `draft`. Nothing is saved until Save (spec §5.2).
  */
-export function applyEntry(draft: WordDraft, result: LookupResult, entry: LookupEntry): AppliedEntry {
-  const pairing = pairCharacters(rebuildSyllables(draft.word, draft.syllables), entry.chars);
+export function applyEntry(draft: WordDraft, result: LookupResult, entry: LookupEntry, base: WordDraft = draft): AppliedEntry {
+  const typed = rebuildSyllables(draft.word, base.syllables);
+  const pairing = pairCharacters(typed, entry.chars);
+  const paired = pairing.syllables.some((s) => s.char);
+  // Paired syllables keep a typed gloss where the entry has none (whole-word terms carry no per-character glosses).
+  const syllables = paired
+    ? pairing.syllables.map((s, i) => (s.gloss || !typed[i]?.gloss ? s : { ...s, gloss: typed[i]!.gloss }))
+    : typed;
   return {
     draft: {
       ...draft,
-      syllables: pairing.syllables,
-      senses: entry.senses.length > 0 ? entry.senses.map((s) => ({ ...s })) : [{ pos: '', meaning: '' }],
-      ipaHanoi: entry.ipaHanoi,
-      ipaSaigon: entry.ipaSaigon,
-      etymology: entry.etymology,
-      audioFile: entry.audioFile,
-      source: result.title ? { wiktionaryTitle: result.title, fetchedAt: result.fetchedAt } : undefined,
+      syllables,
+      senses: (entry.senses.length > 0 ? entry.senses : base.senses).map((s) => ({ ...s })),
+      ipaHanoi: entry.ipaHanoi || base.ipaHanoi,
+      ipaSaigon: entry.ipaSaigon || base.ipaSaigon,
+      etymology: entry.etymology || base.etymology,
+      audioFile: entry.audioFile ?? base.audioFile,
+      source: result.title ? { wiktionaryTitle: result.title, fetchedAt: result.fetchedAt } : base.source,
     },
     note: pairing.note,
   };

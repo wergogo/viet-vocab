@@ -42,11 +42,17 @@ export function parseCharPage(title: string, wikitext: string): CharInfo | null 
         if (meaning) meanings.push(meaning);
       }
     } else if (h.title === 'Compounds') {
-      for (const call of findTemplates(body, 'vi-l')) {
-        // {{vi-l|入口|nhập khẩu}}, sometimes reversed or linked; the Han part can be empty ({{vi-l||quốc xã|}} on 國).
+      for (const call of findTemplates(body, ['vi-l', 'vi-l-lite'])) {
+        // {{vi-l|入口|nhập khẩu}} or {{vi-l-lite|…}}, sometimes reversed or linked. The Han part can be empty
+        // ({{vi-l||quốc xã|}} on 國); of slash-joined spellings the first is kept ("[[đại học]]/[[Đại Học]]" on 學).
         const params = call.positional.slice(0, 2).map((p) => wikiToText(p));
         const han = params.find((p) => cjkChars(p).length > 0) ?? '';
-        const word = params.find((p) => p !== han && p !== '') ?? '';
+        const spellings = params.find((p) => p !== han && p !== '') ?? '';
+        const word =
+          spellings
+            .split('/')
+            .map((s) => s.trim())
+            .find(Boolean) ?? '';
         if (word && !compounds.some((c) => c.han === han && c.word === word)) compounds.push({ han, word });
       }
     }

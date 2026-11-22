@@ -22,6 +22,9 @@ export class LookupError extends Error {
 
 const UNREADABLE = 'Wiktionary sent a response the app could not read. Retry later.';
 
+/** A request that hasn't answered by then fails with the network message, so the user can retry. */
+const TIMEOUT_MS = 15_000;
+
 /** GET on the action API with the parameters every request carries (spec §6). */
 export async function apiGet(params: Record<string, string>, fetchFn: FetchFn = defaultFetch): Promise<unknown> {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -33,7 +36,8 @@ export async function apiGet(params: Record<string, string>, fetchFn: FetchFn = 
   }
   let response: Response;
   try {
-    response = await fetchFn(url.toString(), { headers: { 'Api-User-Agent': 'VietVocab/1.0' } });
+    const signal = typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(TIMEOUT_MS) : undefined;
+    response = await fetchFn(url.toString(), { headers: { 'Api-User-Agent': 'VietVocab/1.0' }, signal });
   } catch {
     throw new LookupError('network', "Couldn't reach Wiktionary. Check the connection, then retry.");
   }
@@ -73,8 +77,11 @@ export function readParse(body: unknown): PageSource | null {
 /** The titles that exist, from an `action=query&titles=…` response. */
 export function existingTitles(body: unknown): Set<string> {
   type QueryPage = { title?: unknown; missing?: unknown; invalid?: unknown };
-  const pages = (body as { query?: { pages?: QueryPage[] } } | null)?.query?.pages ?? [];
-  const titles = pages.filter((p) => !p.missing && !p.invalid).map((p) => p.title);
+  const b = body as { query?: { pages?: unknown }; error?: unknown } | null;
+  const pages = b?.query?.pages;
+  // An error body must not read as "no spelling exists": that answer would be cached for 30 days.
+  if (b?.error || !Array.isArray(pages)) throw new LookupError('response', UNREADABLE);
+  const titles = (pages as QueryPage[]).filter((p) => !p.missing && !p.invalid).map((p) => p.title);
   return new Set(titles.filter((t): t is string => typeof t === 'string'));
 }
 

@@ -4,7 +4,13 @@ import type { FetchFn } from './api';
 import { lookupChar, lookupWord, spellingVariants } from './lookup';
 import { FIXTURES } from './test-fixtures';
 
-/** Answers from fixtures by request: "parse:<page>", "query:<titles>" or "expand:<text>". Unknown pages are missing. */
+/** A title query in which nothing exists. */
+const NO_TITLES = { batchcomplete: true, query: { pages: [] } };
+
+/**
+ * Answers from fixtures by request: "parse:<page>", "query:<titles>" or "expand:<text>". Unknown pages are
+ * missing, and an unknown title query finds nothing.
+ */
 function fakeWiktionary(routes: Record<string, unknown>) {
   const calls: string[] = [];
   const fetchFn: FetchFn = async (url) => {
@@ -17,10 +23,24 @@ function fakeWiktionary(routes: Record<string, unknown>) {
           ? `query:${p.get('titles')}`
           : `expand:${p.get('text')}`;
     calls.push(key);
-    return new Response(JSON.stringify(routes[key] ?? FIXTURES['missing-page']), { status: 200 });
+    const fallback = action === 'query' ? NO_TITLES : FIXTURES['missing-page'];
+    return new Response(JSON.stringify(routes[key] ?? fallback), { status: 200 });
   };
   return { fetchFn, calls };
 }
+
+/** A page whose only entry has no pronunciation section. */
+const NO_PRONUNCIATION = {
+  parse: {
+    title: 'xin chào',
+    wikitext: '==Vietnamese==\n===Interjection===\n{{vi-interj}}\n\n# hello\n',
+    text:
+      '<div class="mw-parser-output"><div class="mw-heading mw-heading2"><h2 id="Vietnamese">Vietnamese</h2></div>' +
+      '<div class="mw-heading mw-heading3"><h3 id="Interjection">Interjection</h3></div><p>xin chào</p><ol><li>hello</li></ol></div>',
+  },
+};
+
+const SENTENCE_IPA = '[toj˧˧ ʔɗaːŋ˧˧ hawk͡p̚˧˨ʔ tɨ˨˩ vɨŋ˧˨ʔ məːj˧˦]';
 
 beforeEach(async () => {
   await resetDb();
@@ -28,14 +48,15 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe('spellingVariants', () => {
-  it('tries the other tone placement and a lowercase first letter', () => {
-    expect(spellingVariants('văn hóa')).toEqual(['văn hoá']);
-    expect(spellingVariants('Nhập khẩu')).toEqual(['nhập khẩu']);
-    expect(spellingVariants('Văn hóa')).toEqual(['Văn hoá', 'văn hóa', 'văn hoá']);
-    expect(spellingVariants('nhập khẩu')).toEqual([]);
+  it('tries the other tone placement, a lowercase first letter, then capitalized forms', () => {
+    expect(spellingVariants('văn hóa')).toEqual(['văn hoá', 'Văn hóa', 'Văn hoá', 'Văn Hóa', 'Văn Hoá', 'văn Hóa', 'văn Hoá']);
+    expect(spellingVariants('Nhập khẩu')).toEqual(['nhập khẩu', 'Nhập Khẩu']);
+    expect(spellingVariants('hà nội')).toEqual(['Hà nội', 'Hà Nội', 'hà Nội']);
+    expect(spellingVariants('tiếng việt')).toContain('tiếng Việt');
   });
 });
 
@@ -60,43 +81,69 @@ describe('lookupWord', () => {
   });
 
   it('tries spelling variants when the page is missing', async () => {
+    const titles = spellingVariants('Văn hoá').join('|');
     const { fetchFn, calls } = fakeWiktionary({
-      'query:Văn hóa|văn hoá|văn hóa': FIXTURES['query-variants'],
+      [`query:${titles}`]: FIXTURES['query-variants'],
       'parse:văn hoá': FIXTURES['van-hoa'],
     });
     expect((await lookupWord('Văn hoá', { fetchFn })).title).toBe('văn hoá');
-    expect(calls).toEqual(['parse:Văn hoá', 'query:Văn hóa|văn hoá|văn hóa', 'parse:văn hoá']);
+    expect(calls).toEqual(['parse:Văn hoá', `query:${titles}`, 'parse:văn hoá']);
+  });
+
+  it('finds a proper noun typed in lowercase', async () => {
+    const titles = spellingVariants('hà nội').join('|');
+    const { fetchFn, calls } = fakeWiktionary({
+      [`query:${titles}`]: { batchcomplete: true, query: { pages: [{ pageid: 1, ns: 0, title: 'Hà Nội' }] } },
+      'parse:Hà Nội': FIXTURES['ha-noi'],
+    });
+    const result = await lookupWord('hà nội', { fetchFn });
+    expect(result.title).toBe('Hà Nội');
+    expect(result.entries[0]!.chars?.chars).toEqual(['河', '內']);
+    expect(calls).toEqual(['parse:hà nội', `query:${titles}`, 'parse:Hà Nội']);
   });
 
   it('fills only the IPA when the word is not on Wiktionary', async () => {
     const text = 'tôi đang học từ vựng mới';
+    const titles = spellingVariants(text).join('|');
     const { fetchFn, calls } = fakeWiktionary({ [`expand:{{vi-IPA|${text}}}`]: FIXTURES['ipa-sentence'] });
-    expect(await lookupWord(text, { fetchFn })).toMatchObject({
-      title: null,
-      entries: [],
-      ipaHanoi: '[toj˧˧ ʔɗaːŋ˧˧ hawk͡p̚˧˨ʔ tɨ˨˩ vɨŋ˧˨ʔ məːj˧˦]',
-    });
-    expect(calls).toEqual([`parse:${text}`, `expand:{{vi-IPA|${text}}}`]);
+    expect(await lookupWord(text, { fetchFn })).toMatchObject({ title: null, entries: [], ipaHanoi: SENTENCE_IPA });
+    expect(calls).toEqual([`parse:${text}`, `query:${titles}`, `expand:{{vi-IPA|${text}}}`]);
+  });
+
+  it('keeps typed text from breaking the {{vi-IPA}} template', async () => {
+    const { fetchFn, calls } = fakeWiktionary({ 'expand:{{vi-IPA|x y}}': FIXTURES['ipa-sentence'] });
+    expect((await lookupWord('x=y', { fetchFn })).ipaHanoi).toBe(SENTENCE_IPA);
+    expect(calls.at(-1)).toBe('expand:{{vi-IPA|x y}}');
+    const empty = fakeWiktionary({});
+    expect(await lookupWord('|||', { fetchFn: empty.fetchFn })).toMatchObject({ title: null, ipaHanoi: '' });
+    expect(empty.calls.some((c) => c.startsWith('expand:'))).toBe(false);
   });
 
   it('gets IPA for an entry without a pronunciation section', async () => {
-    const page = {
-      parse: {
-        title: 'xin chào',
-        wikitext: '==Vietnamese==\n===Interjection===\n{{vi-interj}}\n\n# hello\n',
-        text:
-          '<div class="mw-parser-output"><div class="mw-heading mw-heading2"><h2 id="Vietnamese">Vietnamese</h2></div>' +
-          '<div class="mw-heading mw-heading3"><h3 id="Interjection">Interjection</h3></div><p>xin chào</p><ol><li>hello</li></ol></div>',
-      },
-    };
     const { fetchFn, calls } = fakeWiktionary({
-      'parse:xin chào': page,
+      'parse:xin chào': NO_PRONUNCIATION,
       'expand:{{vi-IPA|xin chào}}': FIXTURES['ipa-sentence'],
     });
     const [entry] = (await lookupWord('xin chào', { fetchFn })).entries;
     expect(entry!.senses).toEqual([{ pos: 'Interjection', meaning: 'hello' }]);
-    expect(entry!.ipaHanoi).toBe('[toj˧˧ ʔɗaːŋ˧˧ hawk͡p̚˧˨ʔ tɨ˨˩ vɨŋ˧˨ʔ məːj˧˦]');
+    expect(entry!.ipaHanoi).toBe(SENTENCE_IPA);
     expect(calls).toEqual(['parse:xin chào', 'expand:{{vi-IPA|xin chào}}']);
+  });
+
+  it('does not cache a result whose IPA request failed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let ipaFails = true;
+    const actions: string[] = [];
+    const fetchFn: FetchFn = async (url) => {
+      const action = new URL(url).searchParams.get('action')!;
+      actions.push(action);
+      if (action === 'expandtemplates' && ipaFails) return new Response('', { status: 429 });
+      return new Response(JSON.stringify(action === 'parse' ? NO_PRONUNCIATION : FIXTURES['ipa-sentence']), { status: 200 });
+    };
+    expect((await lookupWord('xin chào', { fetchFn })).entries[0]!.ipaHanoi).toBe('');
+    ipaFails = false;
+    expect((await lookupWord('xin chào', { fetchFn })).entries[0]!.ipaHanoi).toBe(SENTENCE_IPA);
+    expect(actions).toEqual(['parse', 'expandtemplates', 'parse', 'expandtemplates']);
   });
 
   it('answers from the cache, for the followed spelling too, until refreshed or expired', async () => {
@@ -123,6 +170,12 @@ describe('lookupWord', () => {
     await expect(lookupWord('   ')).rejects.toThrow('Type a word to look up.');
     const busy: FetchFn = async () => new Response('', { status: 503 });
     await expect(lookupWord('x', { fetchFn: busy })).rejects.toMatchObject({ kind: 'http', status: 503 });
+  });
+
+  it('treats an error answer to the spelling query as an error, not as "no spelling exists"', async () => {
+    const titles = spellingVariants('Văn hoá').join('|');
+    const { fetchFn } = fakeWiktionary({ [`query:${titles}`]: FIXTURES['missing-page'] });
+    await expect(lookupWord('Văn hoá', { fetchFn })).rejects.toMatchObject({ kind: 'response' });
   });
 });
 
