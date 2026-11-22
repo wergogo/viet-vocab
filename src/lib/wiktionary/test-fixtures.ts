@@ -1,6 +1,7 @@
 // Real API responses saved by scripts/fetch-wiktionary-fixtures.mjs (CC BY-SA 4.0, see tests/fixtures/wiktionary/README.md).
 import bacSi from '../../../tests/fixtures/wiktionary/bac-si.json';
 import charNhap from '../../../tests/fixtures/wiktionary/char-nhap.json';
+import charQuoc from '../../../tests/fixtures/wiktionary/char-quoc.json';
 import dienThoai from '../../../tests/fixtures/wiktionary/dien-thoai.json';
 import dong from '../../../tests/fixtures/wiktionary/dong.json';
 import hanhPhuc from '../../../tests/fixtures/wiktionary/hanh-phuc.json';
@@ -10,6 +11,7 @@ import kinhTe from '../../../tests/fixtures/wiktionary/kinh-te.json';
 import missingPage from '../../../tests/fixtures/wiktionary/missing-page.json';
 import nhap from '../../../tests/fixtures/wiktionary/nhap.json';
 import nhapKhau from '../../../tests/fixtures/wiktionary/nhap-khau.json';
+import nuoc from '../../../tests/fixtures/wiktionary/nuoc.json';
 import queryVariants from '../../../tests/fixtures/wiktionary/query-variants.json';
 import quocGia from '../../../tests/fixtures/wiktionary/quoc-gia.json';
 import thanhPho from '../../../tests/fixtures/wiktionary/thanh-pho.json';
@@ -21,6 +23,7 @@ import vanHoaStub from '../../../tests/fixtures/wiktionary/van-hoa-stub.json';
 export const FIXTURES: Record<string, unknown> = {
   'bac-si': bacSi,
   'char-nhap': charNhap,
+  'char-quoc': charQuoc,
   'dien-thoai': dienThoai,
   dong,
   'hanh-phuc': hanhPhuc,
@@ -30,6 +33,7 @@ export const FIXTURES: Record<string, unknown> = {
   'missing-page': missingPage,
   nhap,
   'nhap-khau': nhapKhau,
+  nuoc,
   'query-variants': queryVariants,
   'quoc-gia': quocGia,
   'thanh-pho': thanhPho,

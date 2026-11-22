@@ -31,11 +31,13 @@ const FIXTURES = [
   ['nhap', parseWord('nhập')],
   ['tieng-viet', parseWord('tiếng Việt')],
   ['dong', parseWord('đồng')],
+  ['nuoc', parseWord('nước')],
   ['van-hoa-stub', parseWord('văn hóa')],
   ['van-hoa', parseWord('văn hoá')],
   ['missing-page', parseWord('xyzkhongcotu')],
   ['query-variants', { action: 'query', titles: 'xyzkhongcotu|văn hoá' }],
   ['char-nhap', { action: 'parse', page: '入', prop: 'wikitext', redirects: '1' }],
+  ['char-quoc', { action: 'parse', page: '國', prop: 'wikitext', redirects: '1' }],
   ['ipa-sentence', { action: 'expandtemplates', text: '{{vi-IPA|tôi đang học từ vựng mới}}', prop: 'wikitext' }],
 ];
 
