@@ -51,3 +51,12 @@ export function sameLookupWord(a: string, b: string): boolean {
   const key = (s: string) => canonicalTone(cleanText(s)).toLocaleLowerCase('vi');
   return key(a) === key(b);
 }
+
+/**
+ * Whether a lookup made for `sourceWord` still belongs to the word in the form: the same word up to tone placement and
+ * case, or the page the lookup led to (decision 5). The form hides a lookup that doesn't, and drops it only when
+ * another lookup starts or the form is saved, so a typo fixed with backspace loses nothing.
+ */
+export function lookupStillApplies(word: string, sourceWord: string, pageTitle?: string): boolean {
+  return sameLookupWord(word, sourceWord) || (pageTitle !== undefined && sameLookupWord(word, pageTitle));
+}

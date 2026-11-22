@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyDraft } from '../db/words';
-import { applyEntry, applyIpaOnly, sameLookupWord } from './apply';
+import { applyEntry, applyIpaOnly, lookupStillApplies, sameLookupWord } from './apply';
 import { parseWordPage } from './parseWord';
 import { fixturePage } from './test-fixtures';
 import type { LookupResult } from './types';
@@ -120,5 +120,15 @@ describe('sameLookupWord', () => {
   it('ignores case, spacing and tone-mark placement', () => {
     expect(sameLookupWord('Văn  hóa', 'văn hoá')).toBe(true);
     expect(sameLookupWord('văn hóa', 'văn hoa')).toBe(false);
+  });
+});
+
+describe('lookupStillApplies', () => {
+  it('holds for the looked-up word up to tone placement and case, and for the page it led to', () => {
+    expect(lookupStillApplies('Văn hoá', 'văn hóa')).toBe(true);
+    // Mid-edit, on the way to fixing a typo: the form hides the lookup but keeps it.
+    expect(lookupStillApplies('văn h', 'văn hóa')).toBe(false);
+    expect(lookupStillApplies('không', 'ko', 'không')).toBe(true);
+    expect(lookupStillApplies('khôn', 'ko', 'không')).toBe(false);
   });
 });

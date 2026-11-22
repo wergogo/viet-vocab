@@ -4,7 +4,7 @@
   import { findDuplicates } from '../../db/search';
   import { createWord, draftFromWord, emptyDraft, getWord, updateWord, type WordDraft } from '../../db/words';
   import { rebuildSyllables } from '../../text/syllables';
-  import { applyEntry, applyIpaOnly, sameLookupWord } from '../../wiktionary/apply';
+  import { applyEntry, applyIpaOnly, lookupStillApplies } from '../../wiktionary/apply';
   import { lookupWord } from '../../wiktionary/lookup';
   import type { LookupResult } from '../../wiktionary/types';
   import { href, navigate } from '../router';
@@ -32,12 +32,14 @@
 
   let lookupStatus = $state<'idle' | 'loading' | 'error'>('idle');
   let lookupError = $state('');
-  let lookupResult = $state<LookupResult | null>(null);
+  let lookupResult = $state.raw<LookupResult | null>(null);
   let chosenEntry = $state(0);
   let pairingNote = $state<string | null>(null);
   /** The word the lookup, source and recording belong to. */
   let sourceWord = $state('');
   let lookupRun = 0;
+  /** Whether the last lookup was a Refresh, so Retry repeats it as one. */
+  let lastRefresh = false;
   /** The draft before the lookup filled it. Entries fall back to it, so switching etymologies never mixes them. */
   let lookupBase: WordDraft | null = null;
 
@@ -67,13 +69,16 @@
 
   const duplicates = $derived(findDuplicates($liveWords ?? [], draft.word, editId));
 
-  /** Drops the lookup and the source and recording it filled in; an in-flight lookup is ignored. */
+  // Decision 5: a lookup belongs to one word. While the word is retyped as another, the lookup, its page link and its
+  // recording are hidden; they are dropped when a lookup starts for the new word, and left out if the form is saved,
+  // so a typo fixed with backspace loses nothing.
+  const lookupCurrent = $derived(lookupStillApplies(draft.word, sourceWord, draft.source?.wiktionaryTitle));
+
+  /** Drops a lookup made for another word, with the page link and recording it filled in. */
   function forgetLookup() {
-    lookupRun++;
     lookupBase = null;
     lookupResult = null;
-    lookupStatus = 'idle';
-    lookupError = '';
+    chosenEntry = 0;
     pairingNote = null;
     draft.source = undefined;
     draft.audioFile = undefined;
@@ -83,10 +88,6 @@
     const value = (event.currentTarget as HTMLInputElement).value;
     draft.word = value;
     draft.syllables = rebuildSyllables(value, draft.syllables);
-    // A lookup belongs to one word: retyping it as a different word (not just another tone placement or case)
-    // drops the page link and the recording, so the card can't point at the old page.
-    const fromLookup = lookupResult !== null || lookupStatus !== 'idle' || draft.source || draft.audioFile;
-    if (fromLookup && !sameLookupWord(value, sourceWord)) forgetLookup();
   }
 
   function fill(result: LookupResult, index: number) {
@@ -103,20 +104,26 @@
   }
 
   async function runLookup(refresh = false) {
+    if (!lookupCurrent) forgetLookup();
     const run = ++lookupRun;
-    sourceWord = draft.word;
+    const word = draft.word;
+    sourceWord = word;
+    lastRefresh = refresh;
     lookupStatus = 'loading';
     lookupError = '';
     try {
-      const result = await lookupWord(draft.word, { refresh });
+      const result = await lookupWord(word, { refresh });
       if (run !== lookupRun) return;
+      lookupStatus = 'idle';
+      // Retyped as another word while it loaded: the result belongs to the old word.
+      if (!lookupStillApplies(draft.word, word)) return;
       lookupResult = result;
-      chosenEntry = 0;
+      // Refresh and Retry keep the chosen etymology while the page still has it.
+      if (chosenEntry >= result.entries.length) chosenEntry = 0;
       // The draft from before the first lookup stays the base. Taking it again on Refresh would start from fields
       // the last fill set, and etymologies would mix again.
       lookupBase ??= $state.snapshot(draft);
-      fill(result, 0);
-      lookupStatus = 'idle';
+      fill(result, chosenEntry);
     } catch (e) {
       if (run !== lookupRun) return;
       console.error(e);
@@ -137,6 +144,11 @@
     saving = true;
     try {
       const plain = $state.snapshot(draft);
+      // Decision 5: the page link and recording of another word aren't saved with this one.
+      if (!lookupCurrent) {
+        plain.source = undefined;
+        plain.audioFile = undefined;
+      }
       const liveIds = new Set((await listLiveLists()).map((l) => l.id));
       plain.listIds = plain.listIds.filter((id) => liveIds.has(id));
       const saved = editId === undefined ? await createWord(plain) : await updateWord(editId, plain);
@@ -183,18 +195,6 @@
       />
     </label>
 
-    <LookupPanel
-      word={draft.word}
-      status={lookupStatus}
-      error={lookupError}
-      result={lookupResult}
-      chosen={chosenEntry}
-      note={pairingNote}
-      onlookup={() => runLookup()}
-      onrefresh={() => runLookup(true)}
-      onchoose={chooseEntry}
-    />
-
     {#if duplicates.length > 0}
       <p class="notice" role="status">
         Already saved:
@@ -202,6 +202,19 @@
         You can still save another entry.
       </p>
     {/if}
+
+    <LookupPanel
+      word={draft.word}
+      status={lookupCurrent ? lookupStatus : 'idle'}
+      error={lookupError}
+      result={lookupCurrent ? lookupResult : null}
+      chosen={chosenEntry}
+      note={lookupCurrent ? pairingNote : null}
+      onlookup={() => runLookup()}
+      onrefresh={() => runLookup(true)}
+      onretry={() => runLookup(lastRefresh)}
+      onchoose={chooseEntry}
+    />
 
     <SyllableEditor bind:syllables={draft.syllables} />
 
@@ -216,12 +229,14 @@
       </label>
     </div>
 
-    {#if draft.audioFile}
+    {#if draft.audioFile && lookupCurrent}
       <div class="row recording">
         <span class="muted">Recording</span>
         <span class="file">{draft.audioFile}</span>
         <AudioButton text={draft.word} audioFile={draft.audioFile} recordingOnly />
-        <button type="button" onclick={() => (draft.audioFile = undefined)}>Remove</button>
+        <button type="button" aria-label="Remove the recording" onclick={() => (draft.audioFile = undefined)}
+          >Remove</button
+        >
       </div>
     {/if}
 
