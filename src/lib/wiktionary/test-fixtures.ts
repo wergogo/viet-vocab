@@ -1,9 +1,11 @@
 // Real API responses saved by scripts/fetch-wiktionary-fixtures.mjs (CC BY-SA 4.0, see tests/fixtures/wiktionary/README.md).
 import bacSi from '../../../tests/fixtures/wiktionary/bac-si.json';
+import charHoc from '../../../tests/fixtures/wiktionary/char-hoc.json';
 import charNhap from '../../../tests/fixtures/wiktionary/char-nhap.json';
 import charQuoc from '../../../tests/fixtures/wiktionary/char-quoc.json';
 import dienThoai from '../../../tests/fixtures/wiktionary/dien-thoai.json';
 import dong from '../../../tests/fixtures/wiktionary/dong.json';
+import haNoi from '../../../tests/fixtures/wiktionary/ha-noi.json';
 import hanhPhuc from '../../../tests/fixtures/wiktionary/hanh-phuc.json';
 import hocSinh from '../../../tests/fixtures/wiktionary/hoc-sinh.json';
 import ipaSentence from '../../../tests/fixtures/wiktionary/ipa-sentence.json';
@@ -22,10 +24,12 @@ import vanHoaStub from '../../../tests/fixtures/wiktionary/van-hoa-stub.json';
 /** Raw API responses by fixture file name. */
 export const FIXTURES: Record<string, unknown> = {
   'bac-si': bacSi,
+  'char-hoc': charHoc,
   'char-nhap': charNhap,
   'char-quoc': charQuoc,
   'dien-thoai': dienThoai,
   dong,
+  'ha-noi': haNoi,
   'hanh-phuc': hanhPhuc,
   'hoc-sinh': hocSinh,
   'ipa-sentence': ipaSentence,

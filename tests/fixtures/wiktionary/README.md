@@ -18,12 +18,14 @@ The content comes from Wiktionary and is licensed [CC BY-SA 4.0](https://creativ
 | `tieng-viet.json` | parse `tiếng Việt` | characters only in the headword (chữ Nôm) |
 | `dong.json` | parse `đồng` | other languages first, shared pronunciation, four etymologies, a Romanization-only entry |
 | `nuoc.json` | parse `nước` | Nôm characters in wikilinked headwords, with alternatives |
+| `ha-noi.json` | parse `Hà Nội` | a proper noun, for lookups typed in lowercase |
 | `van-hoa-stub.json` | parse `văn hóa` | alternative-spelling stub |
 | `van-hoa.json` | parse `văn hoá` | the stub's main entry |
 | `missing-page.json` | parse `xyzkhongcotu` | `missingtitle` error |
 | `query-variants.json` | query titles `xyzkhongcotu\|văn hoá` | which spelling exists |
 | `char-nhap.json` | parse `入` (wikitext only) | character readings, meanings, compounds |
 | `char-quoc.json` | parse `國` (wikitext only) | a meaning inside `{{vi-Han form of}}`; 80 compounds, some without Han |
+| `char-hoc.json` | parse `學` (wikitext only) | `vi-l-lite` compounds and slash-joined spellings |
 | `ipa-sentence.json` | expandtemplates `{{vi-IPA\|tôi đang học từ vựng mới}}` | IPA for text with no entry |
 
 Wiktionary pages change. To refresh, run `node scripts/fetch-wiktionary-fixtures.mjs --force`, then update the parser tests' expected values where the content changed.
