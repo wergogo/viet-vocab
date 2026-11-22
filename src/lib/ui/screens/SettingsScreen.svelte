@@ -16,6 +16,8 @@
   let adding = false;
   let voiceUri = $state(savedVoiceUri());
   const voice = $derived(pickVoice($vietnameseVoices, voiceUri));
+  /** The saved voice isn't available, so another stands in for it. */
+  const standIn = $derived(voice !== null && voiceUri !== null && voice.voiceURI !== voiceUri);
 
   function chooseVoice(uri: string) {
     voiceUri = uri;
@@ -133,22 +135,28 @@
     {#if voice}
       <label class="field">
         <span>Vietnamese voice for words without a recording this browser can play</span>
-        <select value={voice.voiceURI} onchange={(e) => chooseVoice(e.currentTarget.value)}>
+        <select
+          value={voice.voiceURI}
+          onchange={(e) => chooseVoice(e.currentTarget.value)}
+          aria-describedby={standIn ? 'voice-stand-in' : undefined}
+        >
           {#each $vietnameseVoices as v (v.voiceURI)}
             <option value={v.voiceURI}>{v.name} ({v.lang})</option>
           {/each}
         </select>
       </label>
-      {#if voiceUri !== null && voice.voiceURI !== voiceUri}
-        <p class="muted">The voice you chose isn't available in this browser right now, so this one is used.</p>
+      {#if standIn}
+        <p class="muted" id="voice-stand-in">
+          The voice you chose isn't available in this browser right now, so this one is used.
+        </p>
       {/if}
       <div class="row">
         <button type="button" onclick={testVoice}>Test voice</button>
       </div>
     {:else}
       <p class="muted">
-        This browser offers no Vietnamese text-to-speech voice, so words without a recording it can play can't be read
-        aloud here.
+        This browser offers no Vietnamese text-to-speech voice, so a word is silent here unless it has a recording this
+        browser can play.
       </p>
     {/if}
   </section>
