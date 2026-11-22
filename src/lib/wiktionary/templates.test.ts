@@ -88,7 +88,8 @@ describe('wikiToText', () => {
     const started = performance.now();
     expect(() => wikiToText(`${'{{l|en|'.repeat(5_000)}x${'}}'.repeat(5_000)}`)).not.toThrow();
     findTemplates(`${'{{a|'.repeat(5_000)}${'}}'.repeat(5_000)}`, 'vi-l');
-    expect(performance.now() - started).toBeLessThan(1000);
+    // About 0.4 s here; the bound only has to catch quadratic scanning, which takes far longer, on slow runners too.
+    expect(performance.now() - started).toBeLessThan(5000);
   });
 
   it('stops scanning after many unclosed "{{" instead of slowing down', () => {
