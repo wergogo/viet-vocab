@@ -1,6 +1,8 @@
 import { liveQuery } from 'dexie';
 import { readable, type Readable } from 'svelte/store';
+import { listLiveCards } from '../db/cards';
 import { listLiveLists } from '../db/lists';
+import { getSettings } from '../db/settings';
 import { getWord, listLiveWords } from '../db/words';
 import type { Word } from '../model/types';
 
@@ -20,6 +22,12 @@ export const liveWords = liveStore(() => listLiveWords());
 
 /** All live lists in Vietnamese order. */
 export const liveLists = liveStore(() => listLiveLists());
+
+/** All live review cards. */
+export const liveCards = liveStore(() => listLiveCards());
+
+/** The review settings (the defaults until the first save). */
+export const liveSettings = liveStore(() => getSettings());
 
 /** One word by id: undefined while loading, null when it doesn't exist or was deleted. */
 export function liveWord(id: string): Readable<Word | null | undefined> {
