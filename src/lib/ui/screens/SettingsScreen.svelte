@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pickVoice, saveVoiceUri, savedVoiceUri, speak, vietnameseVoices } from '../../audio/audio';
   import { deleteList, findOrCreateList, listNameKey, renameList } from '../../db/lists';
   import { exportJson, importJson } from '../../db/snapshot';
   import { FileFormatError, NewerSchemaError } from '../../model/file';
@@ -13,6 +14,17 @@
   let fileInput: HTMLInputElement | undefined = $state();
   let listsHeading: HTMLHeadingElement | undefined = $state();
   let adding = false;
+  let voiceUri = $state(savedVoiceUri());
+  const voice = $derived(pickVoice($vietnameseVoices, voiceUri));
+
+  function chooseVoice(uri: string) {
+    voiceUri = uri;
+    saveVoiceUri(uri);
+  }
+
+  function testVoice() {
+    if (voice) speak('Xin chào', voice);
+  }
 
   /** The live list already using this name (same rule as findOrCreateList), other than `exceptId`. */
   function listNamed(name: string, exceptId?: string): List | undefined {
@@ -115,6 +127,28 @@
 
 <div class="stack">
   <h1>Settings</h1>
+
+  <section class="card stack">
+    <h2>Audio (this device)</h2>
+    {#if voice}
+      <label class="field">
+        <span>Vietnamese voice for words without a recording</span>
+        <select value={voice.voiceURI} onchange={(e) => chooseVoice(e.currentTarget.value)}>
+          {#each $vietnameseVoices as v (v.voiceURI)}
+            <option value={v.voiceURI}>{v.name} ({v.lang})</option>
+          {/each}
+        </select>
+      </label>
+      <div class="row">
+        <button type="button" onclick={testVoice}>Test voice</button>
+      </div>
+    {:else}
+      <p class="muted">
+        This device has no Vietnamese text-to-speech voice, so words without a recording can't be read aloud.
+        Recordings from Wiktionary still play.
+      </p>
+    {/if}
+  </section>
 
   <section class="card stack">
     <h2 tabindex="-1" bind:this={listsHeading}>Lists</h2>
