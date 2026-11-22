@@ -71,7 +71,7 @@
 
   // Decision 5: a lookup belongs to one word. While the word is retyped as another, the lookup, its page link and its
   // recording are hidden; they are dropped when a lookup starts for the new word, and left out if the form is saved,
-  // so a typo fixed with backspace loses nothing.
+  // so fixing a typo with backspace keeps them.
   const lookupCurrent = $derived(lookupStillApplies(draft.word, sourceWord, draft.source?.wiktionaryTitle));
 
   /** Drops a lookup made for another word, with the page link and recording it filled in. */
@@ -115,8 +115,8 @@
       const result = await lookupWord(word, { refresh });
       if (run !== lookupRun) return;
       lookupStatus = 'idle';
-      // Retyped as another word while it loaded: the result belongs to the old word.
-      if (!lookupStillApplies(draft.word, word)) return;
+      // Retyped as another word while it loaded: the result belongs to the old word (or to the page it led to).
+      if (!lookupStillApplies(draft.word, word, result.title ?? undefined)) return;
       lookupResult = result;
       // Refresh and Retry keep the chosen etymology while the page still has it.
       if (chosenEntry >= result.entries.length) chosenEntry = 0;

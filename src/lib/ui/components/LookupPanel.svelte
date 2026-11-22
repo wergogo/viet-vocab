@@ -94,8 +94,8 @@
     </fieldset>
   {/if}
 
-  <!-- Mounted while empty, so screen readers announce the note when it appears. -->
-  <div role="status">{#if note}<p class="notice">{note}</p>{/if}</div>
+  <!-- Mounted while empty, so screen readers announce the note when it appears; out of the layout until then. -->
+  <div role="status" class:sr-only={!note}>{#if note}<p class="notice">{note}</p>{/if}</div>
 </div>
 
 <style>
