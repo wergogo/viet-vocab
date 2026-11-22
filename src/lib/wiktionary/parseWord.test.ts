@@ -101,6 +101,15 @@ describe('parseWordPage', () => {
     expect(entries[2]!.senses[0]!.meaning).toBe('copper');
   });
 
+  it('uses each rendered entry once when a page repeats an etymology title', () => {
+    const page = fixturePage('dong');
+    const wikitext = page.wikitext.replace('===Etymology 2===', '===Etymology 1===');
+    const html = page.html.replace('>Etymology 2</h3>', '>Etymology 1</h3>');
+    const { entries } = parseWordPage(wikitext, html)!;
+    expect(entries.map((e) => e.chars?.chars.join(''))).toEqual(['垌', '童', '銅']);
+    expect(entries[1]!.senses[0]!.meaning).toContain('medium');
+  });
+
   it('lists each part of speech once in the label', () => {
     const wikitext = '==Vietnamese==\n===Noun===\n{{vi-noun}}\n# a child\n===Noun===\n{{vi-noun}}\n# a young animal\n';
     const html =

@@ -16,6 +16,9 @@ export function normalizeName(name: string): string {
   return clean.charAt(0).toLowerCase() + clean.slice(1);
 }
 
+/** Unclosed "{{" skipped per scan. Past this the text is malformed beyond use, and stopping keeps scans linear. */
+const MAX_STRAYS = 50;
+
 /** Splits on `|` outside any `{{…}}` or `[[…]]`. */
 export function splitParams(inner: string): string[] {
   const parts: string[] = [];
@@ -98,10 +101,12 @@ export function findTemplates(text: string, names: string | readonly string[]): 
   const wanted = new Set((typeof names === 'string' ? [names] : names).map(normalizeName));
   const found: TemplateCall[] = [];
   let i = text.indexOf('{{');
+  let strays = 0;
   while (i >= 0) {
     const end = closingBraces(text, i);
     if (end < 0) {
       // An unclosed "{{" (a typo on the page) must not hide the templates after it.
+      if (++strays > MAX_STRAYS) break;
       i = text.indexOf('{{', i + 2);
       continue;
     }
@@ -122,9 +127,11 @@ export function firstTemplate(
   accept: (call: TemplateCall) => boolean = () => true,
 ): TemplateCall | null {
   let i = text.indexOf('{{');
+  let strays = 0;
   while (i >= 0) {
     const end = closingBraces(text, i);
     if (end < 0) {
+      if (++strays > MAX_STRAYS) break;
       i = text.indexOf('{{', i + 2);
       continue;
     }
@@ -140,9 +147,11 @@ function replaceTemplates(text: string, render: (call: TemplateCall) => string):
   let out = '';
   let pos = 0;
   let i = text.indexOf('{{');
+  let strays = 0;
   while (i >= 0) {
     const end = closingBraces(text, i);
     if (end < 0) {
+      if (++strays > MAX_STRAYS) break;
       i = text.indexOf('{{', i + 2);
       continue;
     }
@@ -169,7 +178,7 @@ export function wikiToText(wikitext: string): string {
     .replace(/\[\[[^\]|]*\|([^\]]*)\]\]/g, '$1')
     .replace(/\[\[([^\]]*)\]\]/g, '$1')
     .replace(/'{2,}/g, '')
-    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<\/?br\s*\/?>/gi, ' ')
     .replace(/<[^>]+>/g, '')
     .replace(/\s+/g, ' ')
     .trim();

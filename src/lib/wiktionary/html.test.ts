@@ -110,9 +110,9 @@ describe('HTML shapes', () => {
 
   it('joins sub-definitions without doubled punctuation', () => {
     const doc = new DOMParser().parseFromString(
-      '<ol><li>a child.<ol><li>a young animal.</li><li>a puppet</li></ol></li><li>only.</li></ol>',
+      '<ol><li>a child.<ol><li>a young animal.</li><li>a puppet</li></ol></li><li>only.</li><li>parent.<ol><li>.</li></ol></li></ol>',
       'text/html',
     );
-    expect(definitionsOf(doc.body.firstElementChild!)).toEqual(['a child; a young animal; a puppet', 'only.']);
+    expect(definitionsOf(doc.body.firstElementChild!)).toEqual(['a child; a young animal; a puppet', 'only.', 'parent']);
   });
 });

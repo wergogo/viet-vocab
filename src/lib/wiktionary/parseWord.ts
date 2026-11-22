@@ -12,6 +12,11 @@ export interface ParsedWordPage {
   stubTarget: string | null;
 }
 
+function takeByTitle<T extends { title: string | null }>(pool: T[], title: string | null): T | undefined {
+  const i = pool.findIndex((e) => e.title === title);
+  return i >= 0 ? pool.splice(i, 1)[0] : undefined;
+}
+
 /**
  * Parses the Vietnamese section of a word page from its wikitext and rendered HTML (spec §6.2).
  * Returns null when the page has no Vietnamese section. A partial parse fills what it found.
@@ -26,9 +31,11 @@ export function parseWordPage(wikitext: string, html: string): ParsedWordPage | 
   const rendered = splitHtmlEntries(vietnameseElements(html) ?? []);
   const sharedAudio = audioFileIn(wiki.shared);
 
+  // Paired by title, each rendered entry used once: an entry the HTML split differently, or a page that repeats a
+  // title, gets no rendered data instead of another entry's.
+  const pool = [...rendered.entries];
   const built = wiki.entries.map((we) => {
-    // Paired by title: an entry the HTML split differently gets no rendered data instead of another entry's.
-    const he = wiki.numbered ? rendered.entries.find((e) => e.title === we.title) : rendered.entries[0];
+    const he = wiki.numbered ? takeByTitle(pool, we.title) : rendered.entries[0];
     const ipa = he && (he.ipa.hanoi || he.ipa.saigon) ? he.ipa : rendered.sharedIpa;
     const senses: Sense[] = [];
     const posNames: string[] = [];

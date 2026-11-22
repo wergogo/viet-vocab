@@ -81,7 +81,14 @@ describe('wikiToText', () => {
 
   it('drops references and tags', () => {
     expect(wikiToText('a<ref>Norman (1976)</ref> b<ref name="x"/> <sup>c</sup>')).toBe('a b c');
-    expect(wikiToText('one<br>two<br />three')).toBe('one two three');
+    expect(wikiToText('one<br>two<br />three</br>four')).toBe('one two three four');
+  });
+
+  it('stops scanning after many unclosed "{{" instead of slowing down', () => {
+    const started = performance.now();
+    findTemplates(`${'{{ '.repeat(20_000)}{{vi-l|入口|nhập khẩu}}`, 'vi-l');
+    wikiToText('{{ '.repeat(20_000));
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 
   it('keeps converting after an unclosed "{{"', () => {

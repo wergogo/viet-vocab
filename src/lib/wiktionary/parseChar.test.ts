@@ -52,6 +52,22 @@ describe('parseCharPage', () => {
     ]);
   });
 
+  it.each([
+    ['# {{vi-Han form of|nhập}}', ''],
+    ['# {{vi-Han form of|nhập}} to enter', 'to enter'],
+    ['# {{vi-Han form of|quốc|[[country]]; [[state]]; [[nation]]}}', 'country; state; nation'],
+    ['# {{vi-Han form of|quốc|[[country]]}} {{q|archaic}}', 'country (archaic)'],
+    ['## |[[Kangxi radical]] 11—‘[[enter]]’', 'Kangxi radical 11—‘enter’'],
+  ])('reads the meaning line %s', (line, meaning) => {
+    const page = `==Vietnamese==\n===Han character===\n${line}\n`;
+    expect(parseCharPage('x', page)?.meanings).toEqual(meaning ? [meaning] : []);
+  });
+
+  it('unlinks compounds written with links', () => {
+    const text = '==Vietnamese==\n===Han character===\n# x\n====Compounds====\n* {{vi-l|[[入口]]|[[nhập khẩu]]}}\n';
+    expect(parseCharPage('入', text)?.compounds).toEqual([{ han: '入口', word: 'nhập khẩu' }]);
+  });
+
   it('skips examples and merges readings from several Han character sections', () => {
     const text =
       '==Vietnamese==\n===Han character 1===\n{{vi-readings|hanviet=hành-gdhn|nom=}}\n# to go\n##: {{uxi|vi|đi}}\n##* a quote\n' +

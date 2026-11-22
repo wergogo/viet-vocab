@@ -61,7 +61,13 @@ export function definitionsOf(list: Element): string[] {
       .map(plainText);
     const parts = [plainText(li), ...subs].filter(Boolean);
     // Joined parts drop their own final "." or ";", so a row doesn't read "a child.; a young animal".
-    const row = parts.length > 1 ? parts.map((p) => p.replace(/[.;]+$/, '')).join('; ') : (parts[0] ?? '');
+    const row =
+      parts.length > 1
+        ? parts
+            .map((p) => p.replace(/[.;]+$/, '').trim())
+            .filter(Boolean)
+            .join('; ')
+        : (parts[0] ?? '');
     if (row) rows.push(row);
   }
   return rows;
