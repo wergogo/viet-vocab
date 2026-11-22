@@ -42,14 +42,31 @@ export interface List {
   deleted?: undefined;
 }
 
-/** Serialized ts-fsrs card (dates as ISO strings). Milestone 3 gives it a precise type. */
-export type SerializedFsrsCard = Record<string, unknown>;
+/**
+ * A ts-fsrs card with its dates as ISO strings (spec §4.1). `state` is ts-fsrs's State: 0 new, 1 learning, 2 review,
+ * 3 relearning. The field names are ts-fsrs's own, so a card converts both ways without renaming.
+ */
+export interface SerializedFsrsCard {
+  due: ISO;
+  stability: number;
+  difficulty: number;
+  elapsed_days: number;
+  scheduled_days: number;
+  learning_steps: number;
+  reps: number;
+  lapses: number;
+  state: 0 | 1 | 2 | 3;
+  last_review?: ISO;
+}
+
+/** Forward cards show the word and ask for its meaning; reverse cards show the meanings and ask for the word. */
+export type Direction = 'forward' | 'reverse';
 
 export interface ReviewCard {
   /** `${wordId}:f` (forward) or `${wordId}:r` (reverse). */
   id: string;
   wordId: string;
-  direction: 'forward' | 'reverse';
+  direction: Direction;
   fsrs: SerializedFsrsCard;
   /** Time of the first review; used for the daily new-card allowance. */
   introducedAt: ISO;
@@ -62,6 +79,9 @@ export interface Settings {
   reverseCards: boolean;
   updatedAt: ISO;
 }
+
+/** The settings the user edits; `updatedAt` is stamped on save. */
+export type ReviewSettings = Omit<Settings, 'updatedAt'>;
 
 export interface Tombstone {
   id: string;
@@ -82,7 +102,7 @@ export function tombstone(id: string, updatedAt: ISO, wordId?: string): Tombston
   return wordId === undefined ? { id, updatedAt, deleted: true } : { id, updatedAt, deleted: true, wordId };
 }
 
-export const DEFAULT_SETTINGS: Readonly<Omit<Settings, 'updatedAt'>> = {
+export const DEFAULT_SETTINGS: Readonly<ReviewSettings> = {
   newCardsPerDay: 20,
   reverseCards: false,
 };

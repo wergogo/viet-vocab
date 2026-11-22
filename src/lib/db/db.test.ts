@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { fsrsState } from '../model/test-helpers';
 import { tombstone, type Word } from '../model/types';
 import { db, rederiveIfNeeded, resetDb } from './db';
 import { fromRow, toRow } from './derive';
@@ -37,8 +38,8 @@ describe('VocabDB', () => {
     expect(stored && fromRow(stored)).toEqual(word);
     expect(await db.words.get('w2')).toEqual(tombstone('w2', T));
     await db.cards.bulkPut([
-      { id: 'w1:f', wordId: 'w1', direction: 'forward', fsrs: {}, introducedAt: T, updatedAt: T },
-      { id: 'w9:f', wordId: 'w9', direction: 'forward', fsrs: {}, introducedAt: T, updatedAt: T },
+      { id: 'w1:f', wordId: 'w1', direction: 'forward', fsrs: fsrsState(T), introducedAt: T, updatedAt: T },
+      { id: 'w9:f', wordId: 'w9', direction: 'forward', fsrs: fsrsState(T), introducedAt: T, updatedAt: T },
     ]);
     expect((await db.cards.where('wordId').equals('w1').toArray()).map((c) => c.id)).toEqual(['w1:f']);
   });

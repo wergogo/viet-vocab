@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FileFormatError, NewerSchemaError, SCHEMA_VERSION, parseFile, serializeFile, type VocabData } from './file';
+import { fsrsState } from './test-helpers';
 import { tombstone } from './types';
 
 const T = '2026-01-01T00:00:00.000Z';
@@ -82,8 +83,17 @@ describe('parseFile record validation', () => {
     expect(parse({ words: [{ id: 'w', updatedAt: T }] })).toThrow('Word #1 (id w) has no word text.');
     expect(parse({ words: [{ id: 'w', updatedAt: T, word: 'x', syllables: [], senses: [], listIds: 'l1', createdAt: T }] })).toThrow('Word #1 (id w) has no list ids.');
     expect(parse({ lists: [{ id: 'l', updatedAt: T }] })).toThrow('List #1 (id l) has no name.');
-    expect(parse({ cards: [{ id: 'c', updatedAt: T, wordId: 'w', direction: 'sideways', fsrs: {}, introducedAt: T }] })).toThrow(FileFormatError);
+    expect(parse({ cards: [{ id: 'c', updatedAt: T, wordId: 'w', direction: 'sideways', fsrs: fsrsState(T), introducedAt: T }] })).toThrow(FileFormatError);
     expect(parse({ cards: [{ id: 'c', updatedAt: T, wordId: 'w', direction: 'forward', fsrs: null, introducedAt: T }] })).toThrow(FileFormatError);
+  });
+
+  it('accepts the review state ts-fsrs writes and rejects other shapes', () => {
+    const card = { id: 'c', updatedAt: T, wordId: 'w', direction: 'forward', fsrs: fsrsState(T), introducedAt: T };
+    expect(parse({ cards: [card] })).not.toThrow();
+    expect(parse({ cards: [{ ...card, fsrs: { ...card.fsrs, last_review: undefined } }] })).not.toThrow();
+    for (const fsrs of [{}, { ...card.fsrs, due: 'soon' }, { ...card.fsrs, state: 4 }, { ...card.fsrs, reps: 1.5 }, { ...card.fsrs, stability: -1 }]) {
+      expect(parse({ cards: [{ ...card, fsrs }] })).toThrow('Review card #1 (id c) has an invalid review state.');
+    }
   });
 
   it('accepts bare tombstones but rejects odd deleted flags, non-records and duplicate list ids', () => {

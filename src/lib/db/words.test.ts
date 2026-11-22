@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fsrsState } from '../model/test-helpers';
 import { db, resetDb } from './db';
 import { isDirty } from './dirty';
 import {
@@ -143,7 +144,7 @@ describe('updateWord', () => {
 describe('deleteWord', () => {
   it('tombstones the word and its review cards', async () => {
     const w = await createWord(draft());
-    await db.cards.put({ id: `${w.id}:f`, wordId: w.id, direction: 'forward', fsrs: {}, introducedAt: 't', updatedAt: 't' });
+    await db.cards.put({ id: `${w.id}:f`, wordId: w.id, direction: 'forward', fsrs: fsrsState('2026-01-01T00:00:00.000Z'), introducedAt: 't', updatedAt: 't' });
     vi.setSystemTime(new Date('2026-01-03T00:00:00.000Z'));
     await deleteWord(w.id);
     expect(await getWord(w.id)).toBeUndefined();

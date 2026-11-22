@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileFormatError, NewerSchemaError, parseFile, serializeFile } from '../model/file';
+import { fsrsState } from '../model/test-helpers';
 import { tombstone, type Word } from '../model/types';
 import { stripDiacritics } from '../text/normalize';
 import { db, resetDb } from './db';
@@ -82,7 +83,7 @@ describe('mergeIntoLocal', () => {
 });
 
 describe('merge semantics', () => {
-  const card = { id: 'w9:f', wordId: 'w9', direction: 'forward' as const, fsrs: {}, introducedAt: T1, updatedAt: T1 };
+  const card = { id: 'w9:f', wordId: 'w9', direction: 'forward' as const, fsrs: fsrsState(T1), introducedAt: T1, updatedAt: T1 };
 
   it('respects tombstones in both directions', async () => {
     await mergeIntoLocal({ words: [tombstone('w9', T2)], lists: [], cards: [] });

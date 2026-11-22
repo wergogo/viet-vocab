@@ -87,11 +87,30 @@ function wordProblem(r: Fields): string | null {
   return null;
 }
 
-/** The most new cards per day a settings record may ask for. */
-const MAX_NEW_CARDS_PER_DAY = 1000;
+/** The most new cards per day a settings record may ask for; the Settings form keeps to the same range. */
+export const MAX_NEW_CARDS_PER_DAY = 1000;
 
-function isNewCardsPerDay(value: unknown): boolean {
+export function isNewCardsPerDay(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_NEW_CARDS_PER_DAY;
+}
+
+const isCount = (v: unknown): boolean => typeof v === 'number' && Number.isInteger(v) && v >= 0;
+const isAmount = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+
+/** A stored ts-fsrs state as the app writes it (SerializedFsrsCard). */
+function isFsrsCard(v: Fields): boolean {
+  return (
+    isCanonicalIso(v.due) &&
+    isAmount(v.stability) &&
+    isAmount(v.difficulty) &&
+    isAmount(v.elapsed_days) &&
+    isAmount(v.scheduled_days) &&
+    isCount(v.learning_steps) &&
+    isCount(v.reps) &&
+    isCount(v.lapses) &&
+    (v.state === 0 || v.state === 1 || v.state === 2 || v.state === 3) &&
+    (v.last_review === undefined || isCanonicalIso(v.last_review))
+  );
 }
 
 type Collection = 'words' | 'lists' | 'cards';
@@ -111,11 +130,13 @@ const LIVE_CHECKS: Record<Collection, (r: Fields) => string | null> = {
       ? 'has no word id'
       : r.direction !== 'forward' && r.direction !== 'reverse'
         ? 'has an unknown direction'
-        : typeof r.fsrs !== 'object' || r.fsrs === null
+        : !isObject(r.fsrs)
           ? 'has no review state'
-          : !isCanonicalIso(r.introducedAt)
-            ? 'has an invalid introducedAt'
-            : null,
+          : !isFsrsCard(r.fsrs)
+            ? 'has an invalid review state'
+            : !isCanonicalIso(r.introducedAt)
+              ? 'has an invalid introducedAt'
+              : null,
 };
 
 /**
