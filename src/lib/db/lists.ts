@@ -5,6 +5,7 @@ import { cleanText, viCollator } from '../text/normalize';
 import { db } from './db';
 import { isLiveRow } from './derive';
 import { markDirty } from './dirty';
+import { RecordNotFoundError } from './errors';
 
 function requireName(name: string): string {
   const clean = cleanText(name);
@@ -47,7 +48,7 @@ export async function renameList(id: string, name: string): Promise<void> {
   const clean = requireName(name);
   const changed = await db.transaction('rw', db.lists, async () => {
     const list = await db.lists.get(id);
-    if (!list || !isLive(list)) throw new Error(`List ${id} not found`);
+    if (!list || !isLive(list)) throw new RecordNotFoundError(`List ${id} not found`);
     if (list.name === clean) return false;
     await db.lists.put({ ...list, name: clean, updatedAt: nextTimestamp(list.updatedAt) });
     return true;

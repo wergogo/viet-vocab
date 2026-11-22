@@ -6,6 +6,7 @@ import { rebuildSyllables } from '../text/syllables';
 import { db } from './db';
 import { fromRow, isLiveRow, toRow, type LiveWordRow } from './derive';
 import { markDirty } from './dirty';
+import { RecordNotFoundError } from './errors';
 
 /** What the add/edit form edits. Empty strings mean "not set". */
 export interface WordDraft {
@@ -108,7 +109,7 @@ export async function updateWord(id: string, d: WordDraft): Promise<Word> {
   const fields = normalizeDraft(d);
   const word = await db.transaction('rw', db.words, async () => {
     const row = await db.words.get(id);
-    if (!row || !isLiveRow(row)) throw new Error(`Word ${id} not found`);
+    if (!row || !isLiveRow(row)) throw new RecordNotFoundError(`Word ${id} not found`);
     const next: Word = { id, ...fields, createdAt: row.createdAt, updatedAt: nextTimestamp(row.updatedAt) };
     await db.words.put(toRow(next));
     return next;
