@@ -1,4 +1,4 @@
-import { readable, type Readable } from 'svelte/store';
+import { derived, readable, writable, type Readable } from 'svelte/store';
 
 /** Commons serves a file's bytes at Special:FilePath (spec §9). */
 export function commonsAudioUrl(file: string): string {
@@ -117,6 +117,61 @@ export const vietnameseVoices: Readable<SpeechSynthesisVoice[]> = readable<Speec
     for (const id of retries) clearTimeout(id);
   };
 });
+
+/** A per-device setting (spec §4.3: localStorage) as a store; `set` saves it. */
+export interface DeviceSetting<T> extends Readable<T> {
+  set(value: T): void;
+}
+
+/** Wraps a localStorage value in a store that also follows changes made in other tabs. */
+function deviceSetting<T>(key: string, read: () => T, write: (value: T) => void): DeviceSetting<T> {
+  const store = writable<T>(read(), (set) => {
+    set(read());
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === key || e.key === null) set(read());
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  });
+  return {
+    subscribe: store.subscribe,
+    set(value: T) {
+      write(value);
+      store.set(value);
+    },
+  };
+}
+
+/** The voice URI chosen in Settings on this device (null until one is chosen). */
+export const chosenVoiceUri = deviceSetting(VOICE_KEY, savedVoiceUri, saveVoiceUri);
+
+/** The voice words are read with: the chosen one while installed, else the first Vietnamese voice (spec §9). */
+export const chosenVoice: Readable<SpeechSynthesisVoice | null> = derived(
+  [vietnameseVoices, chosenVoiceUri],
+  ([voices, uri]) => pickVoice(voices, uri),
+);
+
+const AUTOPLAY_KEY = 'vv.review.autoplay';
+
+export function savedAutoplay(): boolean {
+  try {
+    return localStorage.getItem(AUTOPLAY_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+export function saveAutoplay(on: boolean): void {
+  try {
+    if (on) localStorage.removeItem(AUTOPLAY_KEY);
+    else localStorage.setItem(AUTOPLAY_KEY, 'off');
+  } catch {
+    // A per-device convenience: without storage, autoplay stays on.
+  }
+}
+
+/** Whether review plays each word when it appears (spec §5.6, per device). On unless turned off. */
+export const autoplay = deviceSetting(AUTOPLAY_KEY, savedAutoplay, saveAutoplay);
 
 /** Speaks the text with the voice, stopping any recording or speech still playing. */
 export function speak(text: string, voice: SpeechSynthesisVoice): void {

@@ -223,3 +223,38 @@ describe('vietnameseVoices', () => {
     expect(seen).toEqual([[]]);
   });
 });
+
+describe('device settings', () => {
+  it('reads with the chosen voice while it is installed, else the first Vietnamese one', async () => {
+    const speech = stubSound();
+    speech.setVoices([voice('en', 'en-US'), voice('vi-1', 'vi-VN'), voice('vi-2', 'vi-VN')]);
+    const { chosenVoice, chosenVoiceUri } = await freshAudio();
+    const seen: (string | undefined)[] = [];
+    onTestFinished(chosenVoice.subscribe((v) => seen.push(v?.voiceURI)));
+    chosenVoiceUri.set('vi-2');
+    expect(localStorage.getItem('vv.audio.voice')).toBe('vi-2');
+    chosenVoiceUri.set('uninstalled');
+    expect(seen).toEqual(['vi-1', 'vi-2', 'vi-1']);
+  });
+
+  it('follows a voice chosen in another tab', async () => {
+    stubSound();
+    const { chosenVoiceUri } = await freshAudio();
+    const seen: (string | null)[] = [];
+    onTestFinished(chosenVoiceUri.subscribe((uri) => seen.push(uri)));
+    localStorage.setItem('vv.audio.voice', 'vi-9');
+    window.dispatchEvent(new StorageEvent('storage', { key: 'vv.audio.voice' }));
+    expect(seen).toEqual([null, 'vi-9']);
+  });
+
+  it('plays words during review unless autoplay is turned off on this device', async () => {
+    const { autoplay } = await freshAudio();
+    const seen: boolean[] = [];
+    onTestFinished(autoplay.subscribe((on) => seen.push(on)));
+    autoplay.set(false);
+    expect(localStorage.getItem('vv.review.autoplay')).toBe('off');
+    autoplay.set(true);
+    expect(localStorage.getItem('vv.review.autoplay')).toBeNull();
+    expect(seen).toEqual([true, false, true]);
+  });
+});

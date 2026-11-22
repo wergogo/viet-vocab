@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { canPlayRecording, pickVoice, pronounce, savedVoiceUri, vietnameseVoices } from '../../audio/audio';
+  import { canPlayRecording, chosenVoice, pronounce } from '../../audio/audio';
 
   // `recordingOnly` (the form's Recording row) never puts the device voice in place of the file.
   let { text, audioFile, recordingOnly = false }: { text: string; audioFile?: string; recordingOnly?: boolean } =
@@ -7,7 +7,7 @@
 
   const uid = $props.id();
   let problem = $state('');
-  const voice = $derived(recordingOnly ? null : pickVoice($vietnameseVoices, savedVoiceUri()));
+  const voice = $derived(recordingOnly ? null : $chosenVoice);
   // Ogg can't play on iPhone; then pronounce() speaks within the tap instead.
   const playable = $derived(audioFile ? canPlayRecording(audioFile) : false);
   const available = $derived(playable || voice !== null);
