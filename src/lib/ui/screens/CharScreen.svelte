@@ -17,8 +17,8 @@
 
   let table = $state.raw<StTable | null>(null);
   let tableFailed = $state(false);
-  // If the table can't load (for example offline), fall back to exact characters. Retry in the Wiktionary section, or
-  // revisiting the page, loads it again.
+  // If the table can't load (for example offline), fall back to exact characters. Retry in the Wiktionary section
+  // loads it again where the browser retries failed module loads; most cache the failure until the page reloads.
   function loadTable() {
     tableFailed = false;
     loadStTable().then(
@@ -149,9 +149,9 @@
     {:else if info.compounds.length === 0}
       <p class="muted">Wiktionary lists no Vietnamese compounds with <span class="han">{wikiTitle}</span>.</p>
     {:else}
-      <p class="muted note">Tap a word to add it with a lookup; ✓ marks the ones you've saved.</p>
+      <p class="muted note">✓ marks words you've saved (tap to open); tap any other to add it with a lookup.</p>
       <ul class="plain-list compounds">
-        <!-- Keyed by position: a page may list the same compound twice. -->
+        <!-- Keyed by position: han + word isn't guaranteed to be unique. -->
         {#each info.compounds as compound, i (i)}
           {@const saved = findDuplicates($liveWords ?? [], compound.word)[0]}
           <li>

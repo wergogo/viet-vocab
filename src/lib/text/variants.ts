@@ -7,7 +7,10 @@ export interface StTable {
 
 let cached: Promise<StTable> | null = null;
 
-/** Loads the table lazily (a separate chunk in the production build). A failed load is retried next time. */
+/**
+ * Loads the table lazily (a separate chunk in the production build). The next call tries a failed load again, though
+ * most browsers still cache a failed module load until the page reloads.
+ */
 export function loadStTable(): Promise<StTable> {
   cached ??= import('./st-table.json')
     .then((m) => m.default as unknown as StTable)
