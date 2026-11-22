@@ -115,8 +115,8 @@ export function speak(text: string, voice: SpeechSynthesisVoice): void {
 }
 
 /**
- * What `pronounce` did: played the recording, spoke because no recording could play here, spoke instead of a recording
- * that failed, or nothing could be heard.
+ * What `pronounce` did: played the recording (also when a newer sound interrupted it), spoke because no recording
+ * could play here, spoke instead of a recording that failed, or nothing could be heard.
  */
 export type Pronounced = 'recording' | 'voice' | 'voice-instead' | 'silent';
 

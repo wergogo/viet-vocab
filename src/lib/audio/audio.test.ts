@@ -157,6 +157,8 @@ describe('pronounce', () => {
     await expect(pronounce('nước', 'missing.wav', viVoice)).resolves.toBe('voice-instead');
     expect(sounds(log)).toEqual(['speak', 'play missing.wav', 'speak nước']);
     await expect(pronounce('nước', 'missing.wav', null)).resolves.toBe('silent');
+    // Without a voice nothing speaks, not even the empty utterance: the Recording row passes a null voice.
+    expect(sounds(log)).toEqual(['speak', 'play missing.wav', 'speak nước', 'play missing.wav']);
     expect(logged).toHaveBeenCalledTimes(2);
   });
 });

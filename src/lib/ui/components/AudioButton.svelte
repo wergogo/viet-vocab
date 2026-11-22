@@ -39,8 +39,8 @@
     >🔊</button
   >
   {#if !available}<span class="muted hint" id={`${uid}-hint`}>{unavailable}</span>{/if}
-  <!-- Mounted while empty, so screen readers announce the message when it appears. -->
-  <span class="problem" class:notice={problem !== ''} role="status">{problem}</span>
+  <!-- Mounted while empty, so screen readers announce the message when it appears; out of the layout until then. -->
+  <span class="problem" class:notice={problem !== ''} class:sr-only={problem === ''} role="status">{problem}</span>
 </span>
 
 <style>
