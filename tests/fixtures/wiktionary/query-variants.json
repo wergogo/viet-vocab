@@ -1,0 +1,17 @@
+{
+  "batchcomplete": true,
+  "query": {
+    "pages": [
+      {
+        "ns": 0,
+        "title": "xyzkhongcotu",
+        "missing": true
+      },
+      {
+        "pageid": 4700057,
+        "ns": 0,
+        "title": "văn hoá"
+      }
+    ]
+  }
+}
