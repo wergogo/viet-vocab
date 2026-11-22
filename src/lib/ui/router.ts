@@ -3,7 +3,7 @@ import { readable } from 'svelte/store';
 export type Route =
   | { name: 'words' }
   | { name: 'word'; id: string }
-  | { name: 'add'; word: string }
+  | { name: 'add'; word: string; lookup?: boolean }
   | { name: 'edit'; id: string }
   | { name: 'char'; char: string }
   | { name: 'settings' };
@@ -31,8 +31,12 @@ export function parseHash(hash: string): Route {
       return param ? { name: 'edit', id: param } : { name: 'words' };
     case 'char':
       return param ? { name: 'char', char: param } : { name: 'words' };
-    case 'add':
-      return { name: 'add', word: new URLSearchParams(query).get('w') ?? '' };
+    case 'add': {
+      // `lookup=1` (from a character page's compounds) opens the form with the word already looked up.
+      const params = new URLSearchParams(query);
+      const word = params.get('w') ?? '';
+      return word && params.get('lookup') === '1' ? { name: 'add', word, lookup: true } : { name: 'add', word };
+    }
     case 'settings':
       return { name: 'settings' };
     default:
@@ -51,7 +55,8 @@ export function href(route: Route): string {
     case 'char':
       return `#/char/${encodeURIComponent(route.char)}`;
     case 'add':
-      return route.word ? `#/add?w=${encodeURIComponent(route.word)}` : '#/add';
+      if (!route.word) return '#/add';
+      return `#/add?w=${encodeURIComponent(route.word)}${route.lookup ? '&lookup=1' : ''}`;
     case 'settings':
       return '#/settings';
   }

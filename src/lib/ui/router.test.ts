@@ -69,3 +69,12 @@ describe('route store', () => {
     expect(seen.at(-1)).toBe('word');
   });
 });
+
+describe('add route lookup flag', () => {
+  it('carries lookup=1 for compounds tapped on a character page', () => {
+    expect(parseHash('#/add?w=nh%E1%BA%ADp%20c%C6%B0&lookup=1')).toEqual({ name: 'add', word: 'nhập cư', lookup: true });
+    expect(parseHash('#/add?lookup=1')).toEqual({ name: 'add', word: '' });
+    expect(href({ name: 'add', word: 'nhập cư', lookup: true })).toBe(`#/add?w=${encodeURIComponent('nhập cư')}&lookup=1`);
+    expect(href({ name: 'add', word: '', lookup: true })).toBe('#/add');
+  });
+});

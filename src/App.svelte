@@ -21,7 +21,7 @@
   {#if $route.name === 'words'}
     <WordsScreen />
   {:else if $route.name === 'add'}
-    {#key $route.word}<WordFormScreen initialWord={$route.word} />{/key}
+    {#key `${$route.word}|${$route.lookup === true}`}<WordFormScreen initialWord={$route.word} />{/key}
   {:else if $route.name === 'edit'}
     {#key $route.id}<WordFormScreen editId={$route.id} />{/key}
   {:else if $route.name === 'word'}
