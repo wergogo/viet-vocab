@@ -3,6 +3,7 @@
   import { findDuplicates, searchWords } from '../../db/search';
   import { isCjkChar } from '../../text/cjk';
   import { charVariants, loadStTable, toTraditional, type StTable } from '../../text/variants';
+  import { LookupError } from '../../wiktionary/api';
   import { lookupChar } from '../../wiktionary/lookup';
   import type { CharInfo } from '../../wiktionary/types';
   import { wiktionaryUrl } from '../../wiktionary/urls';
@@ -11,15 +12,21 @@
   import ExternalLink from '../components/ExternalLink.svelte';
   import WordRowItem from '../components/WordRowItem.svelte';
 
+  // `char` is constant per instance: App.svelte remounts this screen per route via {#key}.
   let { char }: { char: string } = $props();
 
-  let table = $state<StTable | null>(null);
+  let table = $state.raw<StTable | null>(null);
   let tableFailed = $state(false);
-  // If the table can't load (for example offline), fall back to exact characters. Revisiting the page retries.
-  loadStTable().then(
-    (t) => (table = t),
-    () => (tableFailed = true),
-  );
+  // If the table can't load (for example offline), fall back to exact characters. Retry in the Wiktionary section, or
+  // revisiting the page, loads it again.
+  function loadTable() {
+    tableFailed = false;
+    loadStTable().then(
+      (t) => (table = t),
+      () => (tableFailed = true),
+    );
+  }
+  loadTable();
 
   // The word card links only Han characters, but a hand-typed URL can still name anything.
   const isHan = $derived(Array.from(char).every(isCjkChar));
@@ -38,22 +45,42 @@
   });
 
   /** undefined while loading; null when Wiktionary has no Vietnamese entry for the character. */
-  let info = $state<CharInfo | null | undefined>(undefined);
+  let info = $state.raw<CharInfo | null | undefined>(undefined);
   let infoError = $state('');
   let infoRun = 0;
+  let wikiHeading: HTMLHeadingElement | undefined = $state();
 
-  async function loadInfo(refresh = false) {
+  async function loadInfo() {
     const title = wikiTitle;
     const run = ++infoRun;
     info = undefined;
     infoError = '';
     try {
-      const result = await lookupChar(title, { refresh });
+      const result = await lookupChar(title);
       if (run === infoRun) info = result;
     } catch (e) {
       if (run !== infoRun) return;
       console.error(e);
-      infoError = e instanceof Error ? e.message : String(e);
+      // The API's offline message suggests filling in the word by hand, which fits only the add form.
+      infoError =
+        e instanceof LookupError && e.kind === 'offline'
+          ? "You're offline. Readings and compounds from Wiktionary need a connection."
+          : e instanceof Error
+            ? e.message
+            : String(e);
+    }
+  }
+
+  function retry() {
+    wikiHeading?.focus({ preventScroll: true }); // the alert holding Retry goes away
+    if (tableFailed) {
+      // Without the table a simplified character would be looked up as itself (国, not 國). The effect below looks the
+      // character up once the table settles.
+      info = undefined;
+      infoError = '';
+      loadTable();
+    } else {
+      void loadInfo();
     }
   }
 
@@ -77,7 +104,12 @@
         {#if info.meanings.length > 0}<span>{info.meanings.join('; ')}</span>{/if}
       {/if}
       {#if otherForms.length > 0}
-        <span class="muted">Simplified/traditional variants: <span class="han">{otherForms.join(' ')}</span></span>
+        <span class="muted">
+          Simplified/traditional variants:
+          {#each otherForms as form, i (i)}
+            <a class="han variant" href={href({ name: 'char', char: form })}>{form}</a>
+          {/each}
+        </span>
       {/if}
       <ExternalLink href={wiktionaryUrl(wikiTitle)}>Open on Wiktionary</ExternalLink>
     </div>
@@ -104,11 +136,11 @@
   {/if}
 
   {#if single}
-    <h2>On Wiktionary</h2>
+    <h2 tabindex="-1" bind:this={wikiHeading}>On Wiktionary</h2>
     {#if infoError}
       <p class="notice" role="alert">
         {infoError}
-        <button type="button" onclick={() => loadInfo()}>Retry</button>
+        <button type="button" onclick={retry}>Retry</button>
       </p>
     {:else if info === undefined}
       <p class="muted">Loading…</p>
@@ -117,9 +149,10 @@
     {:else if info.compounds.length === 0}
       <p class="muted">Wiktionary lists no Vietnamese compounds with <span class="han">{wikiTitle}</span>.</p>
     {:else}
-      <p class="muted note">✓ = saved. Tap another to add it with a lookup.</p>
+      <p class="muted note">Tap a word to add it with a lookup; ✓ marks the ones you've saved.</p>
       <ul class="plain-list compounds">
-        {#each info.compounds as compound (compound.han + compound.word)}
+        <!-- Keyed by position: a page may list the same compound twice. -->
+        {#each info.compounds as compound, i (i)}
           {@const saved = findDuplicates($liveWords ?? [], compound.word)[0]}
           <li>
             <a
@@ -146,4 +179,5 @@
   p { margin: 0; }
   .note { font-size: 14px; }
   .compounds { flex-direction: row; flex-wrap: wrap; }
+  .variant { display: inline-block; min-width: 24px; min-height: 24px; text-align: center; }
 </style>
