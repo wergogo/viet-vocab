@@ -1,8 +1,11 @@
 <script lang="ts">
   import { deleteWord } from '../../db/words';
   import { isCjkChar } from '../../text/cjk';
+  import { wiktionaryUrl } from '../../wiktionary/urls';
   import { href, navigate } from '../router';
   import { liveLists, liveWord } from '../stores';
+  import AudioButton from '../components/AudioButton.svelte';
+  import ExternalLink from '../components/ExternalLink.svelte';
 
   let { id }: { id: string } = $props();
 
@@ -22,11 +25,7 @@
     !!word &&
       !!(word.ipaHanoi || word.ipaSaigon || word.senses.length > 0 || word.etymology || word.notes || listNames.length > 0),
   );
-  const wiktionaryUrl = $derived(
-    word
-      ? `https://en.wiktionary.org/wiki/${encodeURIComponent((word.source?.wiktionaryTitle ?? word.word).replaceAll(' ', '_'))}#Vietnamese`
-      : '',
-  );
+  const wiktionaryHref = $derived(word ? wiktionaryUrl(word.source?.wiktionaryTitle ?? word.word) : '');
 
   let deleting = $state(false);
   let deleteError = $state('');
@@ -59,7 +58,10 @@
   {/if}
 {:else}
   <article class="card stack">
-    <h1>{word.word}</h1>
+    <div class="title">
+      <h1>{word.word}</h1>
+      <AudioButton text={word.word} audioFile={word.audioFile} />
+    </div>
 
     {#if showSyllables}
       <div class="han-line">
@@ -98,9 +100,7 @@
 
     <div class="row actions">
       <a class="button" href={href({ name: 'edit', id: word.id })}>Edit</a>
-      <a href={wiktionaryUrl} target="_blank" rel="noopener noreferrer"
-        >Open on Wiktionary <span aria-hidden="true">↗</span><span class="sr-only">(opens in a new tab)</span></a
-      >
+      <ExternalLink href={wiktionaryHref}>Open on Wiktionary</ExternalLink>
       <button type="button" class="danger" onclick={remove} disabled={deleting}>Delete</button>
     </div>
     {#if deleteError}<p class="notice" role="alert">{deleteError}</p>{/if}
@@ -108,6 +108,7 @@
 {/if}
 
 <style>
+  .title { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
   h1 { font-size: 28px; overflow-wrap: anywhere; }
   .han-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
   .big { font-size: 32px; }
