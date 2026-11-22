@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cardId } from '../model/ids';
 import { fsrsState } from '../model/test-helpers';
 import { tombstone } from '../model/types';
-import { cardId, listLiveCards, saveReview } from './cards';
+import { listLiveCards, saveReview } from './cards';
 import { db, resetDb } from './db';
 import { dirtySeq } from './dirty';
 import { RecordNotFoundError } from './errors';

@@ -1,3 +1,5 @@
+import type { Direction } from './types';
+
 export function newId(): string {
   // crypto.randomUUID only exists in secure contexts (HTTPS or localhost). The dev server opened
   // from a phone over plain http on the LAN is not one, so fall back to getRandomValues.
@@ -21,4 +23,9 @@ export function nextTimestamp(previous?: string): string {
   const now = Date.now();
   const prev = previous === undefined ? Number.NaN : Date.parse(previous);
   return new Date(Number.isFinite(prev) && prev >= now ? prev + 1 : now).toISOString();
+}
+
+/** Card ids are deterministic (spec §4.1), so every device names a word's forward card the same way. */
+export function cardId(wordId: string, direction: Direction): string {
+  return `${wordId}:${direction === 'forward' ? 'f' : 'r'}`;
 }

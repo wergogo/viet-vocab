@@ -44,13 +44,14 @@ export interface List {
 
 /**
  * A ts-fsrs card with its dates as ISO strings (spec §4.1). `state` is ts-fsrs's State: 0 new, 1 learning, 2 review,
- * 3 relearning. The field names are ts-fsrs's own, so a card converts both ways without renaming.
+ * 3 relearning. The field names are ts-fsrs's own, so a card converts both ways without renaming. `elapsed_days` may
+ * be absent: ts-fsrs 5 writes it but doesn't schedule with it, and ts-fsrs 6 drops it.
  */
 export interface SerializedFsrsCard {
   due: ISO;
   stability: number;
   difficulty: number;
-  elapsed_days: number;
+  elapsed_days?: number;
   scheduled_days: number;
   learning_steps: number;
   reps: number;

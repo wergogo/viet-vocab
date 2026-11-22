@@ -84,16 +84,31 @@ describe('parseFile record validation', () => {
     expect(parse({ words: [{ id: 'w', updatedAt: T, word: 'x', syllables: [], senses: [], listIds: 'l1', createdAt: T }] })).toThrow('Word #1 (id w) has no list ids.');
     expect(parse({ lists: [{ id: 'l', updatedAt: T }] })).toThrow('List #1 (id l) has no name.');
     expect(parse({ cards: [{ id: 'c', updatedAt: T, wordId: 'w', direction: 'sideways', fsrs: fsrsState(T), introducedAt: T }] })).toThrow(FileFormatError);
-    expect(parse({ cards: [{ id: 'c', updatedAt: T, wordId: 'w', direction: 'forward', fsrs: null, introducedAt: T }] })).toThrow(FileFormatError);
+    expect(parse({ cards: [{ id: 'w:f', updatedAt: T, wordId: 'w', direction: 'forward', fsrs: null, introducedAt: T }] })).toThrow(FileFormatError);
   });
 
-  it('accepts the review state ts-fsrs writes and rejects other shapes', () => {
-    const card = { id: 'c', updatedAt: T, wordId: 'w', direction: 'forward', fsrs: fsrsState(T), introducedAt: T };
-    expect(parse({ cards: [card] })).not.toThrow();
-    expect(parse({ cards: [{ ...card, fsrs: { ...card.fsrs, last_review: undefined } }] })).not.toThrow();
-    for (const fsrs of [{}, { ...card.fsrs, due: 'soon' }, { ...card.fsrs, state: 4 }, { ...card.fsrs, reps: 1.5 }, { ...card.fsrs, stability: -1 }]) {
-      expect(parse({ cards: [{ ...card, fsrs }] })).toThrow('Review card #1 (id c) has an invalid review state.');
+  it('accepts the review state ts-fsrs writes, and names the field of any other', () => {
+    const card = { id: 'w:f', updatedAt: T, wordId: 'w', direction: 'forward', fsrs: fsrsState(T), introducedAt: T };
+    const { elapsed_days: _dropped, ...withoutElapsed } = card.fsrs;
+    for (const fsrs of [card.fsrs, { ...card.fsrs, last_review: undefined }, withoutElapsed]) {
+      expect(parse({ cards: [{ ...card, fsrs }] })).not.toThrow();
     }
+    const bad: [Record<string, unknown>, string][] = [
+      [{}, 'due'],
+      [{ ...card.fsrs, due: 'soon' }, 'due'],
+      [{ ...card.fsrs, state: 4 }, 'state'],
+      [{ ...card.fsrs, reps: 1.5 }, 'reps'],
+      [{ ...card.fsrs, stability: -1 }, 'stability'],
+      [{ ...card.fsrs, elapsed_days: null }, 'elapsed_days'],
+    ];
+    for (const [fsrs, field] of bad) {
+      expect(parse({ cards: [{ ...card, fsrs }] })).toThrow(`Review card #1 (id w:f) has an invalid review state (${field}).`);
+    }
+  });
+
+  it("rejects a card whose id doesn't match its word and direction", () => {
+    const card = { id: 'w:f', updatedAt: T, wordId: 'w', direction: 'reverse', fsrs: fsrsState(T), introducedAt: T };
+    expect(parse({ cards: [card] })).toThrow("Review card #1 (id w:f) has an id that doesn't match its word and direction.");
   });
 
   it('accepts bare tombstones but rejects odd deleted flags, non-records and duplicate list ids', () => {

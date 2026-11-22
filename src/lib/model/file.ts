@@ -1,3 +1,5 @@
+import { cardId } from './ids';
+import { isNewCardsPerDay } from './settings';
 import { tombstone, type List, type Rec, type ReviewCard, type Settings, type Word } from './types';
 
 export const APP_ID = 'viet-vocab';
@@ -87,30 +89,34 @@ function wordProblem(r: Fields): string | null {
   return null;
 }
 
-/** The most new cards per day a settings record may ask for; the Settings form keeps to the same range. */
-export const MAX_NEW_CARDS_PER_DAY = 1000;
-
-export function isNewCardsPerDay(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_NEW_CARDS_PER_DAY;
-}
-
 const isCount = (v: unknown): boolean => typeof v === 'number' && Number.isInteger(v) && v >= 0;
 const isAmount = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 
-/** A stored ts-fsrs state as the app writes it (SerializedFsrsCard). */
-function isFsrsCard(v: Fields): boolean {
-  return (
-    isCanonicalIso(v.due) &&
-    isAmount(v.stability) &&
-    isAmount(v.difficulty) &&
-    isAmount(v.elapsed_days) &&
-    isAmount(v.scheduled_days) &&
-    isCount(v.learning_steps) &&
-    isCount(v.reps) &&
-    isCount(v.lapses) &&
-    (v.state === 0 || v.state === 1 || v.state === 2 || v.state === 3) &&
-    (v.last_review === undefined || isCanonicalIso(v.last_review))
-  );
+/** The fields of a stored ts-fsrs state as the app writes them (SerializedFsrsCard). */
+const FSRS_FIELDS: readonly [string, (v: unknown) => boolean][] = [
+  ['due', isCanonicalIso],
+  ['stability', isAmount],
+  ['difficulty', isAmount],
+  ['elapsed_days', (v) => v === undefined || isAmount(v)],
+  ['scheduled_days', isAmount],
+  ['learning_steps', isCount],
+  ['reps', isCount],
+  ['lapses', isCount],
+  ['state', (v) => v === 0 || v === 1 || v === 2 || v === 3],
+  ['last_review', (v) => v === undefined || isCanonicalIso(v)],
+];
+
+function cardProblem(r: Fields): string | null {
+  const { wordId, direction, fsrs } = r;
+  if (!isString(wordId)) return 'has no word id';
+  if (direction !== 'forward' && direction !== 'reverse') return 'has an unknown direction';
+  // One card per word and direction (spec §4.1): any other id would be a second card for the same word.
+  if (r.id !== cardId(wordId, direction)) return "has an id that doesn't match its word and direction";
+  if (!isObject(fsrs)) return 'has no review state';
+  const field = FSRS_FIELDS.find(([name, ok]) => !ok(fsrs[name]));
+  if (field) return `has an invalid review state (${field[0]})`;
+  if (!isCanonicalIso(r.introducedAt)) return 'has an invalid introducedAt';
+  return null;
 }
 
 type Collection = 'words' | 'lists' | 'cards';
@@ -125,18 +131,7 @@ const LIVE_CHECKS: Record<Collection, (r: Fields) => string | null> = {
   words: wordProblem,
   lists: (r) =>
     !isNonEmptyString(r.name) ? 'has no name' : !isCanonicalIso(r.createdAt) ? 'has an invalid createdAt' : null,
-  cards: (r) =>
-    !isString(r.wordId)
-      ? 'has no word id'
-      : r.direction !== 'forward' && r.direction !== 'reverse'
-        ? 'has an unknown direction'
-        : !isObject(r.fsrs)
-          ? 'has no review state'
-          : !isFsrsCard(r.fsrs)
-            ? 'has an invalid review state'
-            : !isCanonicalIso(r.introducedAt)
-              ? 'has an invalid introducedAt'
-              : null,
+  cards: cardProblem,
 };
 
 /**

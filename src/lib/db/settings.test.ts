@@ -49,4 +49,14 @@ describe('review settings', () => {
     expect(await saveSettings({ newCardsPerDay: 0 })).toMatchObject({ newCardsPerDay: 0 });
     expect(await saveSettings({ newCardsPerDay: 1000 })).toMatchObject({ newCardsPerDay: 1000 });
   });
+
+  it('keeps a setting a change names without a value, and refuses reverse cards other than on or off', async () => {
+    await saveSettings({ newCardsPerDay: 7 });
+    expect(await saveSettings({ newCardsPerDay: undefined, reverseCards: true })).toEqual({
+      newCardsPerDay: 7,
+      reverseCards: true,
+    });
+    await expect(saveSettings({ reverseCards: 'yes' as unknown as boolean })).rejects.toThrow(TypeError);
+    expect(await getSettings()).toEqual({ newCardsPerDay: 7, reverseCards: true });
+  });
 });

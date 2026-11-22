@@ -20,7 +20,9 @@ export const RATINGS: readonly { grade: Grade; label: RatingLabel }[] = [
 export interface RatingOption {
   grade: Grade;
   label: RatingLabel;
-  /** When the card would come back after this rating, as short text: "1m", "10m", "2d", "1.5mo". */
+  /** When the card would come back after this rating. */
+  due: Date;
+  /** The same as short text for the button: "1m", "10m", "2d", "1.5mo". */
   interval: string;
 }
 
@@ -29,7 +31,7 @@ export function toFsrs(card: SerializedFsrsCard): Card {
     due: new Date(card.due),
     stability: card.stability,
     difficulty: card.difficulty,
-    elapsed_days: card.elapsed_days,
+    elapsed_days: card.elapsed_days ?? 0,
     scheduled_days: card.scheduled_days,
     learning_steps: card.learning_steps,
     reps: card.reps,
@@ -55,22 +57,41 @@ export function fromFsrs(card: Card): SerializedFsrsCard {
   return out;
 }
 
-/** The card as ts-fsrs schedules it; a word's first review starts from an empty card (spec §4.2). */
-function current(card: SerializedFsrsCard | undefined, now: Date): Card {
-  return card ? toFsrs(card) : createEmptyCard(now);
+/** The error ts-fsrs throws for a card it can't schedule; ts-fsrs 5.4.2 doesn't export its class. */
+function isRefused(e: unknown): boolean {
+  return e instanceof Error && e.name === 'FSRSValidationError';
 }
 
-/** What each rating would do, for the labels on the rating buttons (spec §5.5). */
+/**
+ * Runs ts-fsrs on the card at `now`; a word's first review starts from an empty card (spec §4.2). No card can get
+ * stuck (decision 16): a review dated before the card's last one (a clock set back, or another device's clock running
+ * ahead) counts as made at that last review, and a stored state ts-fsrs refuses (a damaged import) starts over.
+ */
+function schedule<T>(card: SerializedFsrsCard | undefined, now: Date, run: (card: Card, at: Date) => T): T {
+  if (!card) return run(createEmptyCard(now), now);
+  const stored = toFsrs(card);
+  const last = stored.last_review?.getTime() ?? Number.NEGATIVE_INFINITY;
+  const at = last > now.getTime() ? new Date(last) : now;
+  try {
+    return run(stored, at);
+  } catch (e) {
+    if (!isRefused(e)) throw e;
+    return run(createEmptyCard(at), at);
+  }
+}
+
+/** What each rating would do, for the rating buttons (spec §5.5). */
 export function ratingOptions(card: SerializedFsrsCard | undefined, now: Date): RatingOption[] {
-  const preview = scheduler.repeat(current(card, now), now);
-  return RATINGS.map(({ grade, label }) => ({
-    grade,
-    label,
-    interval: formatInterval(preview[grade].card.due.getTime() - now.getTime()),
-  }));
+  return schedule(card, now, (current, at) => {
+    const preview = scheduler.repeat(current, at);
+    return RATINGS.map(({ grade, label }) => {
+      const due = preview[grade].card.due;
+      return { grade, label, due, interval: formatInterval(due.getTime() - now.getTime()) };
+    });
+  });
 }
 
 /** The card's new state after a rating at `now` (spec §8). */
 export function rate(card: SerializedFsrsCard | undefined, grade: Grade, now: Date): SerializedFsrsCard {
-  return fromFsrs(scheduler.next(current(card, now), now, grade).card);
+  return schedule(card, now, (current, at) => fromFsrs(scheduler.next(current, at, grade).card));
 }

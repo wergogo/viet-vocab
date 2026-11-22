@@ -1,4 +1,4 @@
-import { localDate, localDateOf } from '../model/dates';
+import { startOfLocalDay } from '../model/dates';
 import type { Direction, ReviewCard, ReviewSettings, Word } from '../model/types';
 
 /** Cards due within this long are shown early when nothing else is waiting (spec §5.5). */
@@ -35,13 +35,11 @@ export interface Queue {
   nextDue: Date | null;
 }
 
-/** Due-time order, keeping word order for equal times. */
-interface Timed {
+/** A reviewed card and its stored due time. */
+interface Scheduled {
   item: QueueItem;
-  at: number;
+  due: string;
 }
-
-const key = (wordId: string, direction: Direction) => `${wordId}:${direction}`;
 
 /** Oldest word first: new cards come in the order the words were added (spec §5.5). */
 function byAdded(a: Word, b: Word): number {
@@ -49,60 +47,80 @@ function byAdded(a: Word, b: Word): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
-/** A reverse card is first shown no earlier than the day after its forward card was introduced (spec §5.5). */
-function reverseReady(forward: ReviewCard | undefined, today: string): boolean {
-  return forward !== undefined && localDateOf(forward.introducedAt) < today;
+/** Earliest due first; the sort is stable, so equal times keep word order. */
+function byDue(a: Scheduled, b: Scheduled): number {
+  return a.due < b.due ? -1 : a.due > b.due ? 1 : 0;
 }
 
-/** Builds the review queue at `now` (spec §5.5). Pure, so the screen can rebuild it after every rating. */
-export function buildQueue({ words, cards, settings, now, listId }: QueueInput): Queue {
-  const today = localDate(now);
-  const nowMs = now.getTime();
-  const liveIds = new Set(words.map((w) => w.id));
-  const cardOf = new Map<string, ReviewCard>();
-  for (const card of cards) if (liveIds.has(card.wordId)) cardOf.set(key(card.wordId, card.direction), card);
+/** A reverse card shows the meanings, so its word needs at least one with text (decision 5). */
+function hasMeaning(word: Word): boolean {
+  return word.senses.some((s) => s.meaning !== '');
+}
 
-  // The allowance counts every card introduced today, whatever list it belongs to.
-  let introducedToday = 0;
-  for (const card of cardOf.values()) if (localDateOf(card.introducedAt) === today) introducedToday++;
-  const allowance = Math.max(0, settings.newCardsPerDay - introducedToday);
+/** Takes from both lists in turn, starting with the first, then the rest of the longer one. */
+function alternate<T>(first: readonly T[], second: readonly T[]): T[] {
+  const out: T[] = [];
+  for (let i = 0; i < Math.max(first.length, second.length); i++) {
+    if (i < first.length) out.push(first[i]!);
+    if (i < second.length) out.push(second[i]!);
+  }
+  return out;
+}
+
+/**
+ * Builds the review queue at `now` (spec §5.5). Pure, so the screen can rebuild it after every rating. That happens
+ * inside a tap, so it compares stored times as text instead of reading a date from every card: they are canonical ISO
+ * text (`parseFile` checks it), which sorts in time order, and it keeps 10,000 words quick (spec §12).
+ */
+export function buildQueue({ words, cards, settings, now, listId }: QueueInput): Queue {
+  const nowIso = now.toISOString();
+  const soonIso = new Date(now.getTime() + LEARN_AHEAD_MS).toISOString();
+  // A card introduced from local midnight today until tomorrow's was introduced today (spec §5.5, local time).
+  const todayStart = startOfLocalDay(now).toISOString();
+  const tomorrowStart = startOfLocalDay(now, 1).toISOString();
+  const introducedToday = (card: ReviewCard | undefined) =>
+    card !== undefined && card.introducedAt >= todayStart && card.introducedAt < tomorrowStart;
+
+  const forwardOf = new Map<string, ReviewCard>();
+  const reverseOf = new Map<string, ReviewCard>();
+  for (const card of cards) (card.direction === 'forward' ? forwardOf : reverseOf).set(card.wordId, card);
+
+  // The allowance counts every card introduced today, whatever list its word is in (decision 4).
+  let introduced = 0;
+  for (const word of words) {
+    if (introducedToday(forwardOf.get(word.id))) introduced++;
+    if (introducedToday(reverseOf.get(word.id))) introduced++;
+  }
+  const allowance = Math.max(0, settings.newCardsPerDay - introduced);
 
   const scoped = listId === undefined ? [...words] : words.filter((w) => w.listIds.includes(listId));
-  const directions: Direction[] = settings.reverseCards ? ['forward', 'reverse'] : ['forward'];
-  const due: Timed[] = [];
-  const soon: Timed[] = [];
-  const fresh: QueueItem[] = [];
-  let nextDue = Number.POSITIVE_INFINITY;
-
+  const scheduled: Scheduled[] = [];
+  const newForward: QueueItem[] = [];
+  const newReverse: QueueItem[] = [];
   for (const word of scoped.sort(byAdded)) {
-    for (const direction of directions) {
-      // A reverse card shows the meanings, so a word without any has nothing to ask.
-      if (direction === 'reverse' && word.senses.length === 0) continue;
-      const card = cardOf.get(key(word.id, direction));
-      if (!card) {
-        if (direction === 'forward' || reverseReady(cardOf.get(key(word.id, 'forward')), today)) {
-          fresh.push({ word, direction });
-        }
-        continue;
-      }
-      const at = Date.parse(card.fsrs.due);
-      if (at <= nowMs) {
-        due.push({ item: { word, direction, card }, at });
-      } else {
-        nextDue = Math.min(nextDue, at);
-        if (at - nowMs <= LEARN_AHEAD_MS) soon.push({ item: { word, direction, card }, at });
-      }
-    }
+    const forward = forwardOf.get(word.id);
+    if (forward) scheduled.push({ item: { word, direction: 'forward', card: forward }, due: forward.fsrs.due });
+    else newForward.push({ word, direction: 'forward' });
+    if (!settings.reverseCards || !hasMeaning(word)) continue;
+    const reverse = reverseOf.get(word.id);
+    if (reverse) scheduled.push({ item: { word, direction: 'reverse', card: reverse }, due: reverse.fsrs.due });
+    // A reverse card is first shown no earlier than the day after its forward card was introduced (spec §5.5).
+    else if (forward && forward.introducedAt < todayStart) newReverse.push({ word, direction: 'reverse' });
   }
 
-  const byTime = (a: Timed, b: Timed) => a.at - b.at;
+  const due = scheduled.filter((s) => s.due <= nowIso).sort(byDue);
+  const later = scheduled.filter((s) => s.due > nowIso);
+  const soon = later.filter((s) => s.due <= soonIso).sort(byDue);
+  const nextDue = later.reduce<string | null>((min, s) => (min === null || s.due < min ? s.due : min), null);
+  // New words and reverse cards take turns, so turning reverse cards on doesn't hold back new words (decision 15).
+  const fresh = alternate(newForward, newReverse);
   const newItems = fresh.slice(0, allowance);
-  const waiting = [...due.sort(byTime).map((t) => t.item), ...newItems];
+  const waiting = [...due.map((s) => s.item), ...newItems];
   return {
-    items: waiting.length > 0 ? waiting : soon.sort(byTime).map((t) => t.item),
+    items: waiting.length > 0 ? waiting : soon.map((s) => s.item),
     due: due.length,
     newToday: newItems.length,
     newLater: fresh.length - newItems.length,
-    nextDue: Number.isFinite(nextDue) ? new Date(nextDue) : null,
+    nextDue: nextDue === null ? null : new Date(nextDue),
   };
 }

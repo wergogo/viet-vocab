@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { newId, nextTimestamp, nowIso } from './ids';
+import { cardId, newId, nextTimestamp, nowIso } from './ids';
 
 describe('newId', () => {
   it('creates distinct UUIDs', () => {
@@ -7,6 +7,12 @@ describe('newId', () => {
     const b = newId();
     expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     expect(a).not.toBe(b);
+  });
+});
+
+describe('cardId', () => {
+  it("names a word's cards after the word and the direction (spec §4.1)", () => {
+    expect([cardId('w1', 'forward'), cardId('w1', 'reverse')]).toEqual(['w1:f', 'w1:r']);
   });
 });
 

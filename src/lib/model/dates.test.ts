@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { localDate, localDateOf } from './dates';
+import { localDate, startOfLocalDay } from './dates';
 
 describe('local days', () => {
   it('formats the local calendar day, zero-padded', () => {
@@ -7,9 +7,8 @@ describe('local days', () => {
     expect(localDate(new Date(2026, 10, 22, 0, 0))).toBe('2026-11-22');
   });
 
-  it('reads the local day of a stored timestamp, and nothing from an invalid one', () => {
-    const lateEvening = new Date(2026, 10, 22, 23, 30);
-    expect(localDateOf(lateEvening.toISOString())).toBe('2026-11-22');
-    expect(localDateOf('not a time')).toBe('');
+  it('finds local midnight of the same day or a later one, across a month end', () => {
+    expect(startOfLocalDay(new Date(2026, 10, 22, 15, 30))).toEqual(new Date(2026, 10, 22));
+    expect(startOfLocalDay(new Date(2026, 10, 30, 23, 59), 1)).toEqual(new Date(2026, 11, 1));
   });
 });

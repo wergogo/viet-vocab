@@ -4,8 +4,7 @@ export function localDate(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-/** The local day of an ISO timestamp, or '' when it isn't a valid time. */
-export function localDateOf(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? '' : localDate(date);
+/** Local midnight at the start of the day `date` falls on, or of the day `days` later. */
+export function startOfLocalDay(date: Date, days = 0): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
 }

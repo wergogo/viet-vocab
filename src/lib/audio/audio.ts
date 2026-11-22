@@ -118,6 +118,10 @@ export const vietnameseVoices: Readable<SpeechSynthesisVoice[]> = readable<Speec
   };
 });
 
+// Chromium lists no voices until a page first asks for them, then loads them in the background. Asking at startup
+// has them ready by the first word review plays, which reads the voice only inside that tap.
+if (typeof speechSynthesis !== 'undefined') speechSynthesis.getVoices();
+
 /** A per-device setting (spec §4.3: localStorage) as a store; `set` saves it. */
 export interface DeviceSetting<T> extends Readable<T> {
   set(value: T): void;

@@ -1,5 +1,5 @@
-import { isNewCardsPerDay, MAX_NEW_CARDS_PER_DAY } from '../model/file';
 import { nextTimestamp } from '../model/ids';
+import { isNewCardsPerDay, MAX_NEW_CARDS_PER_DAY } from '../model/settings';
 import { DEFAULT_SETTINGS, type ReviewSettings } from '../model/types';
 import { db } from './db';
 import { markDirty } from './dirty';
@@ -18,13 +18,20 @@ export async function saveSettings(change: Partial<ReviewSettings>): Promise<Rev
   if (change.newCardsPerDay !== undefined && !isNewCardsPerDay(change.newCardsPerDay)) {
     throw new RangeError(`New cards per day must be a whole number from 0 to ${MAX_NEW_CARDS_PER_DAY}.`);
   }
+  if (change.reverseCards !== undefined && typeof change.reverseCards !== 'boolean') {
+    throw new TypeError('Reverse cards must be on or off.');
+  }
   let changed = false;
   const settings = await db.transaction('rw', db.settings, async () => {
     const row = await db.settings.get('settings');
     const current: ReviewSettings = row
       ? { newCardsPerDay: row.newCardsPerDay, reverseCards: row.reverseCards }
       : { ...DEFAULT_SETTINGS };
-    const next: ReviewSettings = { ...current, ...change };
+    // Field by field, so a change that names a field without a value keeps the stored one.
+    const next: ReviewSettings = {
+      newCardsPerDay: change.newCardsPerDay ?? current.newCardsPerDay,
+      reverseCards: change.reverseCards ?? current.reverseCards,
+    };
     if (row && next.newCardsPerDay === current.newCardsPerDay && next.reverseCards === current.reverseCards) return current;
     await db.settings.put({ id: 'settings', ...next, updatedAt: nextTimestamp(row?.updatedAt) });
     changed = true;

@@ -1,14 +1,9 @@
-import { nextTimestamp } from '../model/ids';
+import { cardId, nextTimestamp } from '../model/ids';
 import { isLive, type Direction, type ReviewCard, type SerializedFsrsCard } from '../model/types';
 import { db } from './db';
 import { isLiveRow } from './derive';
 import { markDirty } from './dirty';
 import { RecordNotFoundError } from './errors';
-
-/** Card ids are deterministic (spec §4.1), so both devices name a word's forward card the same way. */
-export function cardId(wordId: string, direction: Direction): string {
-  return `${wordId}:${direction === 'forward' ? 'f' : 'r'}`;
-}
 
 export async function listLiveCards(): Promise<ReviewCard[]> {
   return (await db.cards.toArray()).filter(isLive);

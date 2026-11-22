@@ -1,3 +1,5 @@
+import { startOfLocalDay } from '../model/dates';
+
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
@@ -25,11 +27,6 @@ export function formatDueIn(due: Date, now: Date): string {
   if (ms < MINUTE) return 'now';
   if (ms < HOUR) return relative.format(Math.round(ms / MINUTE), 'minute');
   if (ms < DAY) return relative.format(Math.round(ms / HOUR), 'hour');
-  const days = Math.round((startOfDay(due) - startOfDay(now)) / DAY);
+  const days = Math.round((startOfLocalDay(due).getTime() - startOfLocalDay(now).getTime()) / DAY);
   return relative.format(days, 'day');
-}
-
-/** Local midnight of the day containing `date`, in ms. */
-function startOfDay(date: Date): number {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
