@@ -39,6 +39,15 @@ describe('toTraditional', () => {
   });
 });
 
+describe('prototype names', () => {
+  it('are treated as text without entries, not as inherited object keys', () => {
+    for (const name of ['constructor', 'toString', 'hasOwnProperty', '__proto__']) {
+      expect(charVariants(name, table)).toStrictEqual([name]);
+      expect(toTraditional(name, table)).toBe(name);
+    }
+  });
+});
+
 describe('loadStTable', () => {
   it('loads the generated OpenCC table once', async () => {
     const first = loadStTable();

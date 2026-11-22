@@ -17,7 +17,7 @@
 
   // The word card links only Han characters, but a hand-typed URL can still name anything.
   const isHan = $derived(Array.from(char).every(isCjkChar));
-  const otherForms = $derived(table ? charVariants(char, table).filter((v) => v !== char) : []);
+  const otherForms = $derived(table && isHan ? charVariants(char, table).filter((v) => v !== char) : []);
   const matches = $derived.by(() => {
     const t = table;
     if (!isHan) return [];
