@@ -21,6 +21,7 @@ export class LookupError extends Error {
 }
 
 const UNREADABLE = 'Wiktionary sent a response the app could not read. Retry later.';
+const UNREACHABLE = "Couldn't reach Wiktionary. Check the connection, then retry.";
 
 /** A request that hasn't answered by then fails with the network message, so the user can retry. */
 const TIMEOUT_MS = 15_000;
@@ -39,7 +40,7 @@ export async function apiGet(params: Record<string, string>, fetchFn: FetchFn = 
     const signal = typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(TIMEOUT_MS) : undefined;
     response = await fetchFn(url.toString(), { headers: { 'Api-User-Agent': 'VietVocab/1.0' }, signal });
   } catch {
-    throw new LookupError('network', "Couldn't reach Wiktionary. Check the connection, then retry.");
+    throw new LookupError('network', UNREACHABLE);
   }
   if (!response.ok) {
     const message =
@@ -50,7 +51,11 @@ export async function apiGet(params: Record<string, string>, fetchFn: FetchFn = 
   }
   try {
     return await response.json();
-  } catch {
+  } catch (e) {
+    // The timeout also covers reading the body: a slow connection is a network problem, not an unreadable answer.
+    if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
+      throw new LookupError('network', UNREACHABLE);
+    }
     throw new LookupError('response', UNREADABLE);
   }
 }

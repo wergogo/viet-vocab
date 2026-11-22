@@ -41,6 +41,15 @@ describe('apiGet', () => {
     });
   });
 
+  it('reports a timeout while the answer downloads as a network problem', async () => {
+    const slowBody = {
+      ok: true,
+      status: 200,
+      json: () => Promise.reject(new DOMException('The operation timed out.', 'TimeoutError')),
+    } as unknown as Response;
+    await expect(apiGet({}, async () => slowBody)).rejects.toMatchObject({ kind: 'network' });
+  });
+
   it('reports being offline without fetching', async () => {
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
     const fetchFn = vi.fn<FetchFn>();

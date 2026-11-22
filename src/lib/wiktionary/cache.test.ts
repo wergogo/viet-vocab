@@ -23,6 +23,14 @@ describe('lookup cache', () => {
     expect(await db.lookupCache.get('k')).toBeUndefined();
   });
 
+  it('drops an entry dated more than a day ahead, stored while the clock ran fast', async () => {
+    const now = Date.parse('2026-11-21T00:00:00.000Z');
+    await writeCache(['soon'], 1, new Date(now + DAY / 2).toISOString());
+    await writeCache(['future'], 2, '2030-01-01T00:00:00.000Z');
+    expect(await readCache('soon', now)).toBe(1);
+    expect(await readCache('future', now)).toBeUndefined();
+  });
+
   it('purges every expired entry', async () => {
     await writeCache(['old'], 1, '2026-01-01T00:00:00.000Z');
     await writeCache(['new'], 2, '2026-11-20T00:00:00.000Z');

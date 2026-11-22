@@ -6,7 +6,8 @@ const DAY_MS = 86_400_000;
 
 function expired(fetchedAt: string, now: number): boolean {
   const time = Date.parse(fetchedAt);
-  return Number.isNaN(time) || now - time > CACHE_DAYS * DAY_MS;
+  // An entry dated more than a day ahead (stored while the clock ran fast) would otherwise never expire.
+  return Number.isNaN(time) || time - now > DAY_MS || now - time > CACHE_DAYS * DAY_MS;
 }
 
 /** The cached value, or undefined when it is missing or older than 30 days. */

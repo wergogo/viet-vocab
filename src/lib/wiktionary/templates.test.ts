@@ -99,6 +99,15 @@ describe('wikiToText', () => {
     expect(performance.now() - started).toBeLessThan(1000);
   });
 
+  it('stays fast on unclosed links, tags and references', () => {
+    const started = performance.now();
+    wikiToText('[[a| '.repeat(40_000));
+    wikiToText('<ref>x '.repeat(30_000));
+    wikiToText('< '.repeat(100_000));
+    // Quadratic matching takes seconds to minutes here; the bound only has to catch that, on slow runners too.
+    expect(performance.now() - started).toBeLessThan(5000);
+  });
+
   it('keeps converting after an unclosed "{{"', () => {
     expect(wikiToText('a {{ b {{l|en|c}}')).toBe('a {{ b c');
   });

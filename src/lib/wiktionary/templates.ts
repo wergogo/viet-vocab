@@ -174,15 +174,22 @@ function replaceTemplates(text: string, render: (call: TemplateCall) => string):
 const MAX_DEPTH = 40;
 
 /**
+ * Text wikiToText reads. Its inputs are short (a meaning line, a parameter, a label); the cap bounds the reference
+ * pattern, which is quadratic on many unclosed `<ref>` tags.
+ */
+const MAX_TEXT = 20_000;
+
+/**
  * Wikitext to plain text (spec §6.2): `[[a|b]]` → b, `[[a]]` → a, `{{l|en|x}}` → x, `{{q|x}}` → (x);
  * other templates, references, tags and bold/italic quotes are dropped; whitespace is collapsed.
  */
 export function wikiToText(wikitext: string): string {
-  return toText(wikitext, 0);
+  return toText(wikitext.slice(0, MAX_TEXT), 0);
 }
 
+// The link and tag patterns stop at the next "[" or "<", so unclosed links and tags can't make them quadratic.
 function toText(wikitext: string, depth: number): string {
-  const noRefs = wikitext.replace(/<ref[^>]*\/>/g, '').replace(/<ref[^>]*>[\s\S]*?<\/ref>/g, '');
+  const noRefs = wikitext.replace(/<ref[^<>]*\/>/g, '').replace(/<ref[^<>]*>[\s\S]*?<\/ref>/g, '');
   const noTemplates = replaceTemplates(noRefs, (call) => {
     if (depth >= MAX_DEPTH) return '';
     const name = normalizeName(call.name);
@@ -191,11 +198,11 @@ function toText(wikitext: string, depth: number): string {
     return '';
   });
   return noTemplates
-    .replace(/\[\[[^\]|]*\|([^\]]*)\]\]/g, '$1')
-    .replace(/\[\[([^\]]*)\]\]/g, '$1')
+    .replace(/\[\[[^\][|]*\|([^\][]*)\]\]/g, '$1')
+    .replace(/\[\[([^\][]*)\]\]/g, '$1')
     .replace(/'{2,}/g, '')
     .replace(/<\/?br\s*\/?>/gi, ' ')
-    .replace(/<[^>]+>/g, '')
+    .replace(/<[^<>]+>/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
