@@ -56,6 +56,18 @@ describe('findTemplates', () => {
     expect(firstTemplate('\n{{vi-noun|cls=cánh|垌}}\n\n# field')?.positional).toEqual(['垌']);
     expect(firstTemplate('no templates')).toBeNull();
   });
+
+  it('firstTemplate can require a kind of template', () => {
+    const text = '{{wikipedia}} {{vi-noun|cls=cái}}';
+    expect(firstTemplate(text, (call) => call.name.startsWith('vi-'))?.named).toEqual({ cls: 'cái' });
+  });
+
+  it('skips an unclosed "{{" instead of hiding the templates after it', () => {
+    expect(findTemplates('Etymology {{ typo. {{vi-etym-sino|入口}}.', 'vi-etym-sino').map((c) => c.positional)).toEqual([
+      ['入口'],
+    ]);
+    expect(firstTemplate('{{ typo {{vi-noun}}')?.name).toBe('vi-noun');
+  });
 });
 
 describe('wikiToText', () => {
@@ -69,5 +81,10 @@ describe('wikiToText', () => {
 
   it('drops references and tags', () => {
     expect(wikiToText('a<ref>Norman (1976)</ref> b<ref name="x"/> <sup>c</sup>')).toBe('a b c');
+    expect(wikiToText('one<br>two<br />three')).toBe('one two three');
+  });
+
+  it('keeps converting after an unclosed "{{"', () => {
+    expect(wikiToText('a {{ b {{l|en|c}}')).toBe('a {{ b c');
   });
 });

@@ -6,7 +6,7 @@ import { splitEntries, vietnameseSection, type WikiEntry } from './wikitext';
 
 const entries = (name: string) => splitEntries(vietnameseSection(fixturePage(name).wikitext)!).entries;
 const first = (name: string) => charactersFromEntry(entries(name)[0]!);
-const entryOf = (text: string): WikiEntry => ({ title: null, text, pos: [] });
+const entryOf = (text: string): WikiEntry => ({ title: null, text, etymology: text, pos: [] });
 
 describe('charactersFromEntry', () => {
   it('reads whole-word terms without per-character glosses', () => {
@@ -43,6 +43,32 @@ describe('charactersFromEntry', () => {
 
   it('is null without a source of characters', () => {
     expect(charactersFromEntry(entryOf('From French.'))).toBeNull();
+  });
+
+  it('reads wikilinked headword characters and takes the first of several', () => {
+    expect(entries('nuoc').map((e) => charactersFromEntry(e))).toEqual([
+      { kind: 'headword', chars: ['渃'], glosses: null },
+      { kind: 'headword', chars: ['渃'], glosses: null },
+      { kind: 'headword', chars: ['著'], glosses: null },
+    ]);
+  });
+
+  it('reads vi-etym-sino only from the etymology', () => {
+    const entry: WikiEntry = {
+      title: null,
+      text: 'Usage notes: compare {{vi-etym-sino|水|water}}.',
+      etymology: 'From Proto-Vietic.',
+      pos: [],
+    };
+    expect(charactersFromEntry(entry)).toBeNull();
+  });
+
+  it('gives per-character glosses only when every term is one Han character', () => {
+    expect(charactersFromEntry(entryOf('{{vi-etym-sino|仁|humane|?|unknown|義|righteous}}'))).toEqual({
+      kind: 'sino',
+      chars: ['仁', '義'],
+      glosses: null,
+    });
   });
 });
 

@@ -24,9 +24,12 @@ function allCjk(s: string): boolean {
   return cs.length > 0 && cs.every(isCjkChar);
 }
 
-/** The characters for one entry (spec §6.2 "Characters" and "Fallback characters"), or null. */
+/**
+ * The characters for one entry (spec §6.2 "Characters" and "Fallback characters"), or null: the first
+ * `{{vi-etym-sino}}` in the entry's etymology, else a CJK first parameter of a headword template.
+ */
 export function charactersFromEntry(entry: WikiEntry): EntryChars | null {
-  const [sino] = findTemplates(entry.text, 'vi-etym-sino');
+  const [sino] = findTemplates(entry.etymology, 'vi-etym-sino');
   if (sino) {
     const params = sino.positional;
     if ('hv' in sino.named || 'nat' in sino.named || 'preMC' in sino.named) {
@@ -35,12 +38,18 @@ export function charactersFromEntry(entry: WikiEntry): EntryChars | null {
     const terms = params.filter((_, i) => i % 2 === 0);
     const glosses = params.filter((_, i) => i % 2 === 1).map(wikiToText);
     const chars = cjkChars(terms.join(''));
-    const perChar = terms.length > 0 && terms.every((t) => Array.from(t).length === 1);
+    // Glosses go on syllables only when every term is one Han character; otherwise they could shift.
+    const perChar = terms.length > 0 && terms.every((t) => Array.from(t).length === 1 && isCjkChar(t));
     return { kind: 'sino', chars, glosses: perChar ? terms.map((_, i) => glosses[i] ?? '') : null };
   }
   for (const pos of entry.pos) {
-    const first = pos.headword?.positional[0];
-    if (first && allCjk(first)) return { kind: 'headword', chars: Array.from(first), glosses: null };
+    // The value can be wikilinked or list alternatives: "[[渃]], [[𫭔]]" (nước), "[[𡥵]], [[昆]]" (con).
+    const value = wikiToText(pos.headword?.positional[0] ?? '');
+    const first = value
+      .split(/[,，、;]/)
+      .map((s) => s.replace(/\s+/g, ''))
+      .find(allCjk);
+    if (first) return { kind: 'headword', chars: Array.from(first), glosses: null };
   }
   return null;
 }

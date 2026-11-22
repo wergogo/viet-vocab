@@ -33,4 +33,33 @@ describe('parseCharPage', () => {
   it('returns null without a Vietnamese section', () => {
     expect(parseCharPage('入', '==Chinese==\n===Definitions===\n# to enter\n')).toBeNull();
   });
+
+  it('reads the gloss inside vi-Han form of (國)', () => {
+    const quoc = (FIXTURES['char-quoc'] as { parse: { title: string; wikitext: string } }).parse;
+    const info = parseCharPage(quoc.title, quoc.wikitext)!;
+    expect(info).toMatchObject({
+      title: '國',
+      hanViet: ['quốc', 'quấc'],
+      nom: ['cuốc', 'quốc'],
+      meanings: ['country; state; nation'],
+    });
+    expect(info.compounds).toHaveLength(80);
+    expect(info.compounds).toContainEqual({ han: '', word: 'quốc xã' });
+    expect(info.compounds.slice(0, 3)).toEqual([
+      { han: '愛國', word: 'ái quốc' },
+      { han: '英國', word: 'Anh Quốc' },
+      { han: '故國', word: 'cố quốc' },
+    ]);
+  });
+
+  it('skips examples and merges readings from several Han character sections', () => {
+    const text =
+      '==Vietnamese==\n===Han character 1===\n{{vi-readings|hanviet=hành-gdhn|nom=}}\n# to go\n##: {{uxi|vi|đi}}\n##* a quote\n' +
+      '===Han character 2===\n{{vi-readings|hanviet=hạnh-gdhn, hành|nom=hàng-gdhn}}\n# conduct\n';
+    expect(parseCharPage('行', text)).toMatchObject({
+      hanViet: ['hành', 'hạnh'],
+      nom: ['hàng'],
+      meanings: ['to go', 'conduct'],
+    });
+  });
 });

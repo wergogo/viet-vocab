@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fixturePage } from './test-fixtures';
-import { audioFileIn, splitEntries, stubTarget, vietnameseSection } from './wikitext';
+import { audioFileIn, splitEntries, stubTarget, vietnameseSection, wikiHeadings } from './wikitext';
 
 const section = (name: string) => vietnameseSection(fixturePage(name).wikitext)!;
 
@@ -57,5 +57,34 @@ describe('stubTarget', () => {
 
   it('understands the generic templates, whose target is parameter 2', () => {
     expect(stubTarget('===Noun===\n{{vi-noun}}\n\n# {{alternative form of|vi|thuỷ}}\n')).toBe('thuỷ');
+  });
+});
+
+describe('robustness', () => {
+  it('ignores comments', () => {
+    const page =
+      '==Vietnamese== <!-- note -->\n===Etymology===\n<!-- {{vi-etym-sino|錯}} -->{{vi-etym-sino|入口}}\n' +
+      '===Pronunciation===\n<!-- * {{audio|vi|old.ogg}} -->\n===Verb===\n{{vi-verb}}\n# to import\n';
+    const cut = vietnameseSection(page)!;
+    expect(cut).not.toContain('錯');
+    expect(audioFileIn(cut)).toBeUndefined();
+    expect(splitEntries(cut).entries[0]!.etymology.trim()).toBe('{{vi-etym-sino|入口}}');
+  });
+
+  it('reads headings in linear time', () => {
+    const started = performance.now();
+    expect(wikiHeadings(`== ${' '.repeat(200_000)}x`)).toEqual([]);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it('takes the headword template, skipping boxes before it', () => {
+    const { entries } = splitEntries('===Noun===\n{{wikipedia}}\n{{vi-noun|cls=cái|渃}}\n# water\n');
+    expect(entries[0]!.pos[0]!.headword).toMatchObject({ name: 'vi-noun', positional: ['渃'] });
+  });
+
+  it("keeps each entry's etymology", () => {
+    const { entries } = splitEntries(section('dong'));
+    expect(entries[1]!.etymology).toContain('{{vi-etym-sino|童');
+    expect(entries[0]!.etymology).not.toContain('vi-etym-sino');
   });
 });

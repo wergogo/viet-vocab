@@ -33,6 +33,7 @@ export interface LookupResult extends PageResult {
 
 /** A Vietnamese compound listed on a character page, e.g. 入口 nhập khẩu. */
 export interface CharCompound {
+  /** The Han spelling; empty when Wiktionary lists none. */
   han: string;
   word: string;
 }

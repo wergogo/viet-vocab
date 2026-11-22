@@ -1,7 +1,6 @@
 import type { Sense } from '../model/types';
 import { charactersFromEntry } from './characters';
 import { splitHtmlEntries, vietnameseElements } from './html';
-import { ipaFromItems } from './ipa';
 import { wikiToText } from './templates';
 import type { LookupEntry } from './types';
 import { COUNTED_POS, audioFileIn, splitEntries, stubTarget, vietnameseSection } from './wikitext';
@@ -27,9 +26,10 @@ export function parseWordPage(wikitext: string, html: string): ParsedWordPage | 
   const rendered = splitHtmlEntries(vietnameseElements(html) ?? []);
   const sharedAudio = audioFileIn(wiki.shared);
 
-  const built = wiki.entries.map((we, i) => {
-    const he = rendered.entries[i];
-    const ipa = ipaFromItems(he && he.pronunciation.length > 0 ? he.pronunciation : rendered.sharedPronunciation);
+  const built = wiki.entries.map((we) => {
+    // Paired by title: an entry the HTML split differently gets no rendered data instead of another entry's.
+    const he = wiki.numbered ? rendered.entries.find((e) => e.title === we.title) : rendered.entries[0];
+    const ipa = he && (he.ipa.hanoi || he.ipa.saigon) ? he.ipa : rendered.sharedIpa;
     const senses: Sense[] = [];
     const posNames: string[] = [];
     (he?.pos ?? []).forEach((hp, j) => {
@@ -41,7 +41,7 @@ export function parseWordPage(wikitext: string, html: string): ParsedWordPage | 
       for (const meaning of hp.definitions) senses.push({ pos, meaning });
     });
     const entry: LookupEntry = {
-      label: [we.title, posNames.join(', ')].filter(Boolean).join(' · '),
+      label: [we.title, [...new Set(posNames)].join(', ')].filter(Boolean).join(' · '),
       chars: charactersFromEntry(we),
       senses,
       etymology: he?.etymology ?? '',

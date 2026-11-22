@@ -35,8 +35,9 @@ export interface WikiHeading {
 
 export function wikiHeadings(text: string): WikiHeading[] {
   const out: WikiHeading[] = [];
-  for (const m of text.matchAll(/^(={2,6})[ \t]*([^=\n]+?)[ \t]*\1[ \t]*$/gm)) {
-    out.push({ level: m[1]!.length, title: m[2]!, start: m.index!, end: m.index! + m[0].length });
+  // The title can't contain "=", so this pattern never backtracks (a lazy title made long lines cubic).
+  for (const m of text.matchAll(/^(={2,6})([^=\n]+)\1[ \t]*$/gm)) {
+    out.push({ level: m[1]!.length, title: m[2]!.trim(), start: m.index!, end: m.index! + m[0].length });
   }
   return out;
 }
@@ -46,13 +47,15 @@ export function bodyAfter(text: string, headings: readonly WikiHeading[], i: num
   return text.slice(headings[i]!.end, headings[i + 1]?.start ?? text.length);
 }
 
-/** The `==Vietnamese==` section without its heading line, or null when the page has none. */
+/** The `==Vietnamese==` section without its heading line or comments, or null when the page has none. */
 export function vietnameseSection(wikitext: string): string | null {
-  const hs = wikiHeadings(wikitext);
+  // Comments don't show on the page; read as content they would hide headings or add stale templates.
+  const text = wikitext.replace(/<!--[\s\S]*?(?:-->|$)/g, '');
+  const hs = wikiHeadings(text);
   const i = hs.findIndex((h) => h.level === 2 && h.title === 'Vietnamese');
   if (i < 0) return null;
   const next = hs.slice(i + 1).find((h) => h.level === 2);
-  return wikitext.slice(hs[i]!.end, next?.start ?? wikitext.length);
+  return text.slice(hs[i]!.end, next?.start ?? text.length);
 }
 
 export interface WikiPos {
@@ -65,6 +68,8 @@ export interface WikiEntry {
   /** "Etymology 2" for numbered entries, otherwise null. */
   title: string | null;
   text: string;
+  /** The body of the entry's etymology heading, where `{{vi-etym-sino}}` belongs; empty without one. */
+  etymology: string;
   pos: WikiPos[];
 }
 
@@ -75,15 +80,26 @@ export interface WikiSection {
   entries: WikiEntry[];
 }
 
+/** Headword templates: `{{head|vi|…}}` or a `{{vi-…}}` one (boxes such as `{{wikipedia}}` can come first). */
+function isHeadword(call: TemplateCall): boolean {
+  const name = normalizeName(call.name);
+  return name === 'head' || name.startsWith('vi-');
+}
+
 function readEntry(text: string, title: string | null): WikiEntry {
   const hs = wikiHeadings(text);
   const pos: WikiPos[] = [];
+  let etymology = '';
   hs.forEach((h, i) => {
+    if (h.title === 'Etymology' || NUMBERED_ETYMOLOGY.test(h.title)) {
+      etymology ||= bodyAfter(text, hs, i);
+      return;
+    }
     if (!POS_HEADINGS.has(h.title)) return;
     const beforeDefinitions = bodyAfter(text, hs, i).split(/^#/m)[0] ?? '';
-    pos.push({ name: h.title, headword: firstTemplate(beforeDefinitions) });
+    pos.push({ name: h.title, headword: firstTemplate(beforeDefinitions, isHeadword) });
   });
-  return { title, text, pos };
+  return { title, text, etymology, pos };
 }
 
 /** Splits a Vietnamese section into entries at `Etymology N` headings; without them it is one entry. */

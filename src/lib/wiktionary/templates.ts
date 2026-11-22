@@ -100,7 +100,11 @@ export function findTemplates(text: string, names: string | readonly string[]): 
   let i = text.indexOf('{{');
   while (i >= 0) {
     const end = closingBraces(text, i);
-    if (end < 0) break;
+    if (end < 0) {
+      // An unclosed "{{" (a typo on the page) must not hide the templates after it.
+      i = text.indexOf('{{', i + 2);
+      continue;
+    }
     const call = parseCall(text, i, end);
     if (wanted.has(normalizeName(call.name))) {
       found.push(call);
@@ -112,12 +116,23 @@ export function findTemplates(text: string, names: string | readonly string[]): 
   return found;
 }
 
-/** The first top-level template call in the text, whatever its name. */
-export function firstTemplate(text: string): TemplateCall | null {
-  const i = text.indexOf('{{');
-  if (i < 0) return null;
-  const end = closingBraces(text, i);
-  return end < 0 ? null : parseCall(text, i, end);
+/** The first top-level template call that `accept` accepts (any call by default). */
+export function firstTemplate(
+  text: string,
+  accept: (call: TemplateCall) => boolean = () => true,
+): TemplateCall | null {
+  let i = text.indexOf('{{');
+  while (i >= 0) {
+    const end = closingBraces(text, i);
+    if (end < 0) {
+      i = text.indexOf('{{', i + 2);
+      continue;
+    }
+    const call = parseCall(text, i, end);
+    if (accept(call)) return call;
+    i = text.indexOf('{{', end);
+  }
+  return null;
 }
 
 /** Replaces each top-level template with what `render` returns for it. */
@@ -127,7 +142,10 @@ function replaceTemplates(text: string, render: (call: TemplateCall) => string):
   let i = text.indexOf('{{');
   while (i >= 0) {
     const end = closingBraces(text, i);
-    if (end < 0) break;
+    if (end < 0) {
+      i = text.indexOf('{{', i + 2);
+      continue;
+    }
     out += text.slice(pos, i) + render(parseCall(text, i, end));
     pos = end;
     i = text.indexOf('{{', end);
@@ -151,6 +169,7 @@ export function wikiToText(wikitext: string): string {
     .replace(/\[\[[^\]|]*\|([^\]]*)\]\]/g, '$1')
     .replace(/\[\[([^\]]*)\]\]/g, '$1')
     .replace(/'{2,}/g, '')
+    .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<[^>]+>/g, '')
     .replace(/\s+/g, ' ')
     .trim();
