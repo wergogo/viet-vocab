@@ -13,7 +13,8 @@
     "build:st-table": "node scripts/build-st-table.mjs"
   },
   "dependencies": {
-    "dexie": "^4.4.7"
+    "dexie": "^4.4.7",
+    "ts-fsrs": "^5.4.2"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
