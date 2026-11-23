@@ -34,7 +34,7 @@ function readRemote(text: string, config: SyncConfig): VocabFile {
     if (e instanceof FileFormatError) {
       throw new SyncError(
         'bad-file',
-        `${config.path} in ${config.owner}/${config.repo} can't be read: ${e.message} Sync stopped, so the file isn't overwritten.`,
+        `${config.path} in ${config.owner}/${config.repo} can't be read, so it isn't overwritten: ${e.message}`,
       );
     }
     throw e;
@@ -109,7 +109,7 @@ export async function runSyncCycle(
       } catch (e) {
         if (!(e instanceof SyncError) || e.kind !== 'conflict') throw e;
         if (attempt === MAX_ATTEMPTS) {
-          throw new SyncError('conflict', `${config.path} kept changing on GitHub during the sync. Sync will try again later.`);
+          throw new SyncError('conflict', `${config.path} kept changing on GitHub during the sync.`);
         }
         knownSha = undefined;
         continue;

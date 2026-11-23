@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import {
     cleanConfig,
     configProblems,
+    fileKey,
     isClassicToken,
     lastSync,
     SYNC_DEFAULTS,
@@ -34,8 +36,12 @@
   let editing = $state(false);
   let form = $state<SyncConfig>(blank());
   let problems = $state<ConfigProblems>({});
-  let checking = $state(false);
+  let checking = false;
+  let checkRun = 0;
   let checkResult = $state('');
+  let checkFailed = $state(false);
+  let heading: HTMLHeadingElement | undefined = $state();
+  let formEl: HTMLFormElement | undefined = $state();
 
   const showForm = $derived($syncConfig === null || editing);
   /** While the saved settings are edited, an empty token field keeps the saved token. */
@@ -43,6 +49,9 @@
 
   const dateAndTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const timeOnly = new Intl.DateTimeFormat(undefined, { timeStyle: 'short' });
+
+  /** The last sync time, only when it describes the file now configured. */
+  const syncedAt = $derived($syncConfig && $lastSync?.key === fileKey($syncConfig) ? $lastSync.at : undefined);
 
   function syncedText(at: string | undefined): string {
     if (!at) return 'Not synced yet.';
@@ -61,101 +70,130 @@
       case 'offline':
         return "Offline. Changes sync when you're back online.";
       case 'error':
-        return `${stopsAutoSync(status.kind) ? 'Sync stopped.' : 'Sync failed.'} ${status.message}`;
+        return stopsAutoSync(status.kind)
+          ? `Sync stopped. ${status.message}`
+          : `Sync failed. ${status.message} It will try again after your next change, or when you come back to the app.`;
       default:
-        return syncedText($lastSync?.at);
+        return syncedText(syncedAt);
     }
   });
 
-  /** The settings the form describes, or null after showing what to fix. */
-  function formConfig(): SyncConfig | null {
+  /** The settings the form describes, or null after showing what to fix (and moving focus to the first field). */
+  async function formConfig(): Promise<SyncConfig | null> {
     const config = cleanConfig($state.snapshot(form));
     if (keepsToken && config.token === '' && $syncConfig) config.token = $syncConfig.token;
     problems = configProblems(config);
-    return Object.keys(problems).length === 0 ? config : null;
+    if (Object.keys(problems).length === 0) return config;
+    await tick();
+    formEl?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+    return null;
+  }
+
+  function clearCheck() {
+    checkRun++;
+    checkResult = '';
+    checkFailed = false;
+  }
+
+  /** The view changed and removed the pressed button, so keep focus in this section. */
+  async function focusSection() {
+    await tick();
+    heading?.focus();
   }
 
   async function testConnection() {
-    const config = formConfig();
-    if (!config) return;
+    if (checking) return;
+    clearCheck();
+    const run = checkRun;
+    const config = await formConfig();
+    if (!config || run !== checkRun) return;
     checking = true;
     checkResult = 'Checking…';
     try {
       const { words } = await checkConnection(config);
+      if (run !== checkRun) return;
       const where = `${config.owner}/${config.repo}`;
       checkResult =
         words === null
-          ? `Connected to ${where}. There's no ${config.path} yet: the first sync creates it.`
-          : `Connected to ${where}. ${config.path} holds ${words} ${words === 1 ? 'word' : 'words'}.`;
+          ? `Connected to ${where}, and the token can read it. There's no ${config.path} yet: the first sync creates it, which also checks that the token can write.`
+          : `Connected to ${where}, and the token can read it: ${config.path} holds ${words} ${words === 1 ? 'word' : 'words'}. Writing is checked the first time this device uploads a change.`;
     } catch (e) {
       if (!(e instanceof SyncError)) console.error(e);
+      if (run !== checkRun) return;
+      checkFailed = true;
       checkResult = e instanceof SyncError ? e.message : "The check didn't finish. Please try again.";
     } finally {
       checking = false;
     }
   }
 
-  function save(event: SubmitEvent) {
+  async function save(event: SubmitEvent) {
     event.preventDefault();
-    const config = formConfig();
+    clearCheck();
+    const config = await formConfig();
     if (!config) return;
     saveSyncConfig(config);
     editing = false;
-    checkResult = '';
     form = blank();
+    await focusSection();
   }
 
-  function edit() {
+  async function edit() {
     if (!$syncConfig) return;
     form = { ...$syncConfig, token: '' };
     problems = {};
-    checkResult = '';
+    clearCheck();
     editing = true;
+    await focusSection();
   }
 
-  function cancel() {
+  async function cancel() {
     editing = false;
     problems = {};
-    checkResult = '';
+    clearCheck();
     form = blank();
+    await focusSection();
   }
 
-  function stopSyncing() {
+  async function stopSyncing() {
     if (!confirm('Stop syncing on this device? The token is removed from this browser; your words stay here.')) return;
+    clearCheck();
     editing = false;
     saveSyncConfig(null);
+    await focusSection();
   }
 </script>
 
 <section class="card stack">
-  <h2>Sync</h2>
+  <h2 tabindex="-1" bind:this={heading}>Sync</h2>
   {#if !showForm && $syncConfig}
     <p>
       Syncing with <strong>{$syncConfig.owner}/{$syncConfig.repo}</strong>: {$syncConfig.path} on {$syncConfig.branch}.
     </p>
     <p class:notice={$syncStatus.state === 'error'} role="status">{statusText}</p>
-    {#if $syncStatus.state !== 'idle' && $lastSync}<p class="muted">{syncedText($lastSync.at)}</p>{/if}
+    {#if $syncStatus.state !== 'idle' && syncedAt}<p class="muted">{syncedText(syncedAt)}</p>{/if}
     <div class="row wrap">
-      <button type="button" class="primary" onclick={syncNow} disabled={$syncStatus.state === 'syncing'}>Sync now</button>
+      <button type="button" class="primary" onclick={syncNow}>Sync now</button>
       <button type="button" onclick={edit}>Change settings</button>
-      <button type="button" onclick={stopSyncing}>Stop syncing on this device</button>
+      <button type="button" class="danger" onclick={stopSyncing}>Stop syncing on this device</button>
     </div>
   {:else}
+    {#if editing && $syncStatus.state === 'error'}<p class="notice" role="status">{statusText}</p>{/if}
     {#if !editing}
       <p class="muted">
         Sync keeps your words the same on all your devices, through one file in a private GitHub repository. Set it up
         once:
       </p>
-      <ol class="muted steps">
-        <li><ExternalLink href={NEW_REPO_URL}>Create a private repository</ExternalLink>, adding a README.</li>
-        <li>
-          <ExternalLink href={NEW_TOKEN_URL}>Create a fine-grained token</ExternalLink> for that repository only, with
-          Contents: Read and write.
-        </li>
-        <li>On each device, fill in the fields below, test the connection, and save.</li>
-      </ol>
     {/if}
-    <form class="stack" onsubmit={save} novalidate>
+    <ol class="muted steps">
+      <li><ExternalLink href={NEW_REPO_URL}>Create a private repository</ExternalLink>, adding a README.</li>
+      <li>
+        <ExternalLink href={NEW_TOKEN_URL}>Create a fine-grained token</ExternalLink> for that repository only, with
+        Contents: Read and write.
+      </li>
+      <li>On each device, fill in the fields below, test the connection, and save.</li>
+    </ol>
+    <form class="stack" onsubmit={save} oninput={clearCheck} novalidate bind:this={formEl}>
       {#each FIELDS as field (field.name)}
         <label class="field">
           <span>{field.label}</span>
@@ -191,11 +229,11 @@
         </p>
       {/if}
       <div class="row wrap">
-        <button type="button" onclick={testConnection} disabled={checking}>Test connection</button>
+        <button type="button" onclick={testConnection}>Test connection</button>
         <button type="submit" class="primary">Save</button>
         {#if editing}<button type="button" onclick={cancel}>Cancel</button>{/if}
       </div>
-      {#if checkResult}<p role="status">{checkResult}</p>{/if}
+      <p class:notice={checkFailed} role="status">{checkResult}</p>
     </form>
   {/if}
 </section>

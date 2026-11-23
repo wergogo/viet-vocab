@@ -27,7 +27,7 @@
       <a class="tab" class:active={isActive(tab.name)} aria-current={isActive(tab.name) ? 'page' : undefined} href={href({ name: tab.name })}>
         <span aria-hidden="true">{tab.icon}</span><span>{tab.label}</span>
         {#if tab.name === 'settings' && $syncStatus.state === 'error' && stopsAutoSync($syncStatus.kind)}
-          <span class="dot" aria-hidden="true"></span><span class="sr-only">(sync problem)</span>
+          <span class="dot" aria-hidden="true"></span><span class="sr-only">(sync stopped)</span>
         {/if}
       </a>
     {/each}

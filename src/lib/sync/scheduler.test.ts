@@ -312,7 +312,7 @@ describe('SyncScheduler', () => {
     expect(s.status()).toEqual({
       state: 'error',
       kind: 'unexpected',
-      message: 'Sync failed on this device: The quota has been exceeded.',
+      message: 'Something went wrong on this device: The quota has been exceeded.',
     });
     expect(logged).toHaveBeenCalledOnce();
     logged.mockRestore();

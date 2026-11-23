@@ -67,7 +67,7 @@ export class GitHubFiles {
         signal,
       });
     } catch {
-      throw new SyncError('network', "Couldn't reach GitHub. Sync will try again later.");
+      throw new SyncError('network', "Couldn't reach GitHub.");
     }
   }
 
@@ -86,7 +86,7 @@ export class GitHubFiles {
     const limited =
       response.headers.get('x-ratelimit-remaining') === '0' || response.headers.has('retry-after') || /rate limit/i.test(message);
     if (status === 429 || (status === 403 && limited)) {
-      return new SyncError('rate-limited', 'GitHub asked the app to slow down. Sync will try again later.');
+      return new SyncError('rate-limited', 'GitHub asked the app to slow down.');
     }
     if (status === 403) {
       return new SyncError(
@@ -106,7 +106,7 @@ export class GitHubFiles {
       return new SyncError('conflict', `${this.#config.path} changed on GitHub during the sync.`);
     }
     if (status === 422) return new SyncError('unexpected', `GitHub refused the upload${message ? `: ${message}` : '.'}`);
-    if (status >= 500) return new SyncError('server', `GitHub had a problem (error ${status}). Sync will try again later.`);
+    if (status >= 500) return new SyncError('server', `GitHub had a problem (error ${status}).`);
     return new SyncError('unexpected', `GitHub answered with error ${status}.`);
   }
 
@@ -163,7 +163,7 @@ export class GitHubFiles {
     } catch {
       throw new SyncError(
         'bad-file',
-        `${this.#config.path} in ${this.#repoName} isn't text this app wrote. Sync stopped, so the file isn't overwritten.`,
+        `${this.#config.path} in ${this.#repoName} isn't text this app wrote, so it isn't overwritten.`,
       );
     }
     return { status: 'found', text, sha: await blobSha(bytes) };

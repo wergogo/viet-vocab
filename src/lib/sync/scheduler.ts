@@ -184,7 +184,7 @@ export class SyncScheduler {
       this.#error =
         e instanceof SyncError
           ? e
-          : new SyncError('unexpected', `Sync failed on this device: ${e instanceof Error ? e.message : String(e)}`);
+          : new SyncError('unexpected', `Something went wrong on this device: ${e instanceof Error ? e.message : String(e)}`);
       if (this.#error.kind === 'network' && !this.#deps.online()) this.#missed = true;
     }
     this.#running = false;

@@ -25,6 +25,7 @@
   let answerButton: HTMLButtonElement | undefined = $state();
   let answer: HTMLElement | undefined = $state();
 
+  // These annotations break a circular type inference between session, next, queue and cards, so they must stay.
   const session: ReviewSession = new ReviewSession({
     // The queue below is built over the session's cards, so its first item is the next card.
     next: (): QueueItem | null => {
@@ -41,6 +42,7 @@
   onDestroy(() => session.stop());
 
   // While reviewing, the session's own copy, so a rating's background save doesn't build the queue again.
+  // (Annotated to break the circular type inference with session, next and queue; keep the annotation.)
   const cards: ReviewCard[] | undefined = $derived(session.cards ?? $liveCards);
   const queue: Queue | null = $derived(
     $liveWords && $liveLists && cards && $liveSettings
