@@ -6,6 +6,7 @@ export type Route =
   | { name: 'add'; word: string; lookup?: boolean }
   | { name: 'edit'; id: string }
   | { name: 'char'; char: string }
+  | { name: 'review'; listId?: string }
   | { name: 'settings' };
 
 /** decodeURIComponent that returns '' for malformed escapes, so a bad link falls back instead of throwing. */
@@ -37,6 +38,11 @@ export function parseHash(hash: string): Route {
       const word = params.get('w') ?? '';
       return word && params.get('lookup') === '1' ? { name: 'add', word, lookup: true } : { name: 'add', word };
     }
+    case 'review': {
+      // `list=<id>` reviews one list (spec §5.5); the Words screen's chip passes its list filter.
+      const listId = new URLSearchParams(query).get('list');
+      return listId ? { name: 'review', listId } : { name: 'review' };
+    }
     case 'settings':
       return { name: 'settings' };
     default:
@@ -57,6 +63,8 @@ export function href(route: Route): string {
     case 'add':
       if (!route.word) return '#/add';
       return `#/add?w=${encodeURIComponent(route.word)}${route.lookup ? '&lookup=1' : ''}`;
+    case 'review':
+      return route.listId ? `#/review?list=${encodeURIComponent(route.listId)}` : '#/review';
     case 'settings':
       return '#/settings';
   }

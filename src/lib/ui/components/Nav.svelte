@@ -3,12 +3,16 @@
 
   let { current }: { current: Route['name'] } = $props();
 
-  const tabs: { name: 'words' | 'settings'; label: string; icon: string }[] = [
+  type Tab = 'words' | 'review' | 'settings';
+
+  // Spec §5: Words · Review · Settings, plus Add.
+  const tabs: { name: Tab; label: string; icon: string }[] = [
     { name: 'words', label: 'Words', icon: '📚' },
+    { name: 'review', label: 'Review', icon: '📇' },
     { name: 'settings', label: 'Settings', icon: '⚙️' },
   ];
 
-  function isActive(name: 'words' | 'settings'): boolean {
+  function isActive(name: Tab): boolean {
     if (name === 'words') return current === 'words' || current === 'word' || current === 'char' || current === 'edit';
     return current === name;
   }

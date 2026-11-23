@@ -11,6 +11,9 @@ describe('parseHash', () => {
     expect(parseHash('#/add')).toEqual({ name: 'add', word: '' });
     expect(parseHash('#/add?w=nh%E1%BA%ADp')).toEqual({ name: 'add', word: 'nhập' });
     expect(parseHash('#/settings')).toEqual({ name: 'settings' });
+    expect(parseHash('#/review')).toEqual({ name: 'review' });
+    expect(parseHash('#/review?list=l%201')).toEqual({ name: 'review', listId: 'l 1' });
+    expect(parseHash('#/review?list=')).toEqual({ name: 'review' });
   });
 
   it('falls back to the word list', () => {
@@ -28,6 +31,8 @@ describe('href', () => {
       { name: 'char', char: '國' },
       { name: 'add', word: 'văn hoá' },
       { name: 'add', word: '' },
+      { name: 'review' },
+      { name: 'review', listId: 'a&b' },
       { name: 'settings' },
     ];
     for (const r of routes) expect(parseHash(href(r))).toEqual(r);

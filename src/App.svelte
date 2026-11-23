@@ -5,9 +5,17 @@
   import WordFormScreen from './lib/ui/screens/WordFormScreen.svelte';
   import WordScreen from './lib/ui/screens/WordScreen.svelte';
   import CharScreen from './lib/ui/screens/CharScreen.svelte';
+  import ReviewScreen from './lib/ui/screens/ReviewScreen.svelte';
   import SettingsScreen from './lib/ui/screens/SettingsScreen.svelte';
 
-  const TITLES = { words: 'Words', add: 'Add word', edit: 'Edit word', word: 'Word', settings: 'Settings' } as const;
+  const TITLES = {
+    words: 'Words',
+    add: 'Add word',
+    edit: 'Edit word',
+    word: 'Word',
+    review: 'Review',
+    settings: 'Settings',
+  } as const;
 
   $effect(() => {
     const r = $route;
@@ -30,6 +38,8 @@
     {#key $route.id}<WordScreen id={$route.id} />{/key}
   {:else if $route.name === 'char'}
     {#key $route.char}<CharScreen char={$route.char} />{/key}
+  {:else if $route.name === 'review'}
+    {#key $route.listId ?? ''}<ReviewScreen listId={$route.listId} />{/key}
   {:else if $route.name === 'settings'}
     <SettingsScreen />
   {/if}
