@@ -1,6 +1,7 @@
 <script lang="ts">
   import { route } from './lib/ui/router';
   import Nav from './lib/ui/components/Nav.svelte';
+  import UpdateBar from './lib/ui/components/UpdateBar.svelte';
   import WordsScreen from './lib/ui/screens/WordsScreen.svelte';
   import WordFormScreen from './lib/ui/screens/WordFormScreen.svelte';
   import WordScreen from './lib/ui/screens/WordScreen.svelte';
@@ -44,3 +45,4 @@
     <SettingsScreen />
   {/if}
 </main>
+<UpdateBar />
