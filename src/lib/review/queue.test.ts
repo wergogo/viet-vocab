@@ -61,8 +61,9 @@ describe('buildQueue', () => {
     const beforeMidnight = new Date(2026, 10, 21, 23, 59).toISOString();
     const afterMidnight = new Date(2026, 10, 22, 0, 1).toISOString();
     const cards = [card('a', at(20), beforeMidnight), card('b', at(20), afterMidnight)];
-    // Only b's card was introduced today, and only a's reverse card is ready.
-    expect(ids({ words, cards, settings: { newCardsPerDay: 3, reverseCards: true } })).toEqual(['c:f', 'a:r']);
+    // Only b's card was introduced today, and only a's reverse card is ready. b's was a forward card, so a reverse
+    // card goes next.
+    expect(ids({ words, cards, settings: { newCardsPerDay: 3, reverseCards: true } })).toEqual(['a:r', 'c:f']);
     expect(queue({ words, cards, settings: { newCardsPerDay: 1, reverseCards: true } })).toMatchObject({
       newToday: 0,
       newLater: 2,
@@ -78,7 +79,8 @@ describe('buildQueue', () => {
   it('starts reverse cards the day after the forward card, only for words with a meaning', () => {
     const words = [word('a', 1), word('b', 2), word('c', 3, { senses: [{ pos: 'Noun', meaning: '' }] }), word('d', 4)];
     const cards = [card('a', at(20), YESTERDAY), card('b', at(20), at(8)), card('c', at(20), YESTERDAY)];
-    expect(ids({ words, cards, settings: reverseOn })).toEqual(['d:f', 'a:r']);
+    // b's forward card was introduced today, so a reverse card goes next (decision 15).
+    expect(ids({ words, cards, settings: reverseOn })).toEqual(['a:r', 'd:f']);
     expect(ids({ words, cards })).toEqual(['d:f']);
   });
 
@@ -89,6 +91,18 @@ describe('buildQueue', () => {
     const input = { words: [...learned, ...unseen], cards, settings: { newCardsPerDay: 4, reverseCards: true } };
     expect(ids(input)).toEqual(['d:f', 'a:r', 'e:f', 'b:r']);
     expect(queue(input)).toMatchObject({ newToday: 4, newLater: 2 });
+  });
+
+  it('keeps taking turns as the queue is rebuilt after each rating', () => {
+    const words = [word('a', 1), word('b', 2), word('c', 3), word('d', 4), word('e', 5), word('f', 6)];
+    let cards = ['a', 'b', 'c'].map((id) => card(id, at(20)));
+    const shown: string[] = [];
+    for (let minute = 0; minute < 4; minute++) {
+      const next = queue({ words, cards, settings: { newCardsPerDay: 4, reverseCards: true } }).items[0]!;
+      shown.push(`${next.word.id}:${next.direction[0]}`);
+      cards = [...cards, card(next.word.id, at(20), at(11, minute), next.direction)];
+    }
+    expect(shown).toEqual(['d:f', 'a:r', 'e:f', 'b:r']);
   });
 
   it('leaves reverse cards out while reverse cards are off', () => {
@@ -105,6 +119,13 @@ describe('buildQueue', () => {
     expect(queue({ words, cards: learning })).toMatchObject({ due: 0, newToday: 0 });
     const withNew = [...words, word('d', 4)];
     expect(ids({ words: withNew, cards: learning })).toEqual(['d:f']);
+  });
+
+  it('orders cards due at the same time by word, forward before reverse', () => {
+    const words = [word('b', 2), word('a', 1)];
+    const cards = [card('b', at(9)), card('a', at(9), YESTERDAY, 'reverse'), card('a', at(9))];
+    // Then b's reverse card, which is new.
+    expect(ids({ words, cards, settings: reverseOn })).toEqual(['a:f', 'a:r', 'b:f', 'b:r']);
   });
 
   it('has no next due time when no card waits for a later time', () => {

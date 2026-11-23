@@ -8,15 +8,15 @@
   /** The stored count when the field last held something that isn't a valid count; null while it holds one. */
   let rejectedOver = $state<number | null>(null);
   let saveError = $state('');
-  // The typed text stays until it is corrected. When the stored count changes meanwhile (another tab, an import),
-  // the field shows that count instead, so the message goes too.
-  const countError = $derived(
-    $liveSettings !== undefined && rejectedOver === $liveSettings.newCardsPerDay
-      ? `Enter a whole number from 0 to ${MAX_NEW_CARDS_PER_DAY}.`
-      : '',
-  );
+  const countError = $derived(rejectedOver === null ? '' : `Enter a whole number from 0 to ${MAX_NEW_CARDS_PER_DAY}.`);
 
-  /** Saves a change; if that fails, `undo` puts the control back to the stored value. */
+  // The typed text stays until it is corrected. When the stored count changes meanwhile (another tab, an import),
+  // the field shows that count instead, so the message goes for good.
+  $effect.pre(() => {
+    if (rejectedOver !== null && $liveSettings && $liveSettings.newCardsPerDay !== rejectedOver) rejectedOver = null;
+  });
+
+  /** Saves a change; if that fails, `undo` puts the control back to the value stored by then. */
   async function save(change: Partial<ReviewSettings>, undo: () => void) {
     saveError = '';
     try {
@@ -30,20 +30,18 @@
 
   function saveCount(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
-    const stored = $liveSettings?.newCardsPerDay ?? null;
     const count = parseNewCardsPerDay(input.value);
     if (count === null) {
-      rejectedOver = stored;
+      rejectedOver = $liveSettings?.newCardsPerDay ?? null;
       return;
     }
     rejectedOver = null;
-    void save({ newCardsPerDay: count }, () => (input.value = String(stored ?? '')));
+    void save({ newCardsPerDay: count }, () => (input.value = String($liveSettings?.newCardsPerDay ?? '')));
   }
 
   function saveReverse(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
-    const stored = $liveSettings?.reverseCards ?? !input.checked;
-    void save({ reverseCards: input.checked }, () => (input.checked = stored));
+    void save({ reverseCards: input.checked }, () => (input.checked = $liveSettings?.reverseCards ?? !input.checked));
   }
 </script>
 

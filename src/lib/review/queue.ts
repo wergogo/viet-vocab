@@ -12,7 +12,7 @@ export interface QueueItem {
 }
 
 export interface QueueInput {
-  /** Live words. */
+  /** Live words, in any order. */
   words: readonly Word[];
   /** Live cards. Cards of words that aren't live are ignored (spec §4.2 references). */
   cards: readonly ReviewCard[];
@@ -41,15 +41,16 @@ interface Scheduled {
   due: string;
 }
 
-/** Oldest word first: new cards come in the order the words were added (spec §5.5). */
-function byAdded(a: Word, b: Word): number {
-  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+/** Oldest word first, and a word's forward card before its reverse card (spec §5.5: the order words were added). */
+function byAdded(a: QueueItem, b: QueueItem): number {
+  if (a.word.createdAt !== b.word.createdAt) return a.word.createdAt < b.word.createdAt ? -1 : 1;
+  if (a.word.id !== b.word.id) return a.word.id < b.word.id ? -1 : 1;
+  return a.direction === b.direction ? 0 : a.direction === 'forward' ? -1 : 1;
 }
 
-/** Earliest due first; the sort is stable, so equal times keep word order. */
+/** Earliest due first, then in word order. */
 function byDue(a: Scheduled, b: Scheduled): number {
-  return a.due < b.due ? -1 : a.due > b.due ? 1 : 0;
+  return a.due < b.due ? -1 : a.due > b.due ? 1 : byAdded(a.item, b.item);
 }
 
 /** A reverse card shows the meanings, so its word needs at least one with text (decision 5). */
@@ -69,8 +70,9 @@ function alternate<T>(first: readonly T[], second: readonly T[]): T[] {
 
 /**
  * Builds the review queue at `now` (spec §5.5). Pure, so the screen can rebuild it after every rating. That happens
- * inside a tap, so it compares stored times as text instead of reading a date from every card: they are canonical ISO
- * text (`parseFile` checks it), which sorts in time order, and it keeps 10,000 words quick (spec §12).
+ * inside a tap, so it stays quick at 10,000 words (spec §14): it compares stored times as text instead of reading a date
+ * from every card (they are canonical ISO text, which `parseFile` checks and which sorts in time order), and it sorts
+ * only the cards it may show, not every word.
  */
 export function buildQueue({ words, cards, settings, now, listId }: QueueInput): Queue {
   const nowIso = now.toISOString();
@@ -86,18 +88,19 @@ export function buildQueue({ words, cards, settings, now, listId }: QueueInput):
   for (const card of cards) (card.direction === 'forward' ? forwardOf : reverseOf).set(card.wordId, card);
 
   // The allowance counts every card introduced today, whatever list its word is in (decision 4).
-  let introduced = 0;
+  let forwardToday = 0;
+  let reverseToday = 0;
   for (const word of words) {
-    if (introducedToday(forwardOf.get(word.id))) introduced++;
-    if (introducedToday(reverseOf.get(word.id))) introduced++;
+    if (introducedToday(forwardOf.get(word.id))) forwardToday++;
+    if (introducedToday(reverseOf.get(word.id))) reverseToday++;
   }
-  const allowance = Math.max(0, settings.newCardsPerDay - introduced);
+  const allowance = Math.max(0, settings.newCardsPerDay - forwardToday - reverseToday);
 
-  const scoped = listId === undefined ? [...words] : words.filter((w) => w.listIds.includes(listId));
+  const scoped = listId === undefined ? words : words.filter((w) => w.listIds.includes(listId));
   const scheduled: Scheduled[] = [];
   const newForward: QueueItem[] = [];
   const newReverse: QueueItem[] = [];
-  for (const word of scoped.sort(byAdded)) {
+  for (const word of scoped) {
     const forward = forwardOf.get(word.id);
     if (forward) scheduled.push({ item: { word, direction: 'forward', card: forward }, due: forward.fsrs.due });
     else newForward.push({ word, direction: 'forward' });
@@ -112,8 +115,11 @@ export function buildQueue({ words, cards, settings, now, listId }: QueueInput):
   const later = scheduled.filter((s) => s.due > nowIso);
   const soon = later.filter((s) => s.due <= soonIso).sort(byDue);
   const nextDue = later.reduce<string | null>((min, s) => (min === null || s.due < min ? s.due : min), null);
-  // New words and reverse cards take turns, so turning reverse cards on doesn't hold back new words (decision 15).
-  const fresh = alternate(newForward, newReverse);
+  // New words and reverse cards take turns (decision 15). The queue is rebuilt after every rating, so the turn comes
+  // from today's introductions: reverse cards go first while fewer of them than new words were introduced today.
+  newForward.sort(byAdded);
+  newReverse.sort(byAdded);
+  const fresh = reverseToday < forwardToday ? alternate(newReverse, newForward) : alternate(newForward, newReverse);
   const newItems = fresh.slice(0, allowance);
   const waiting = [...due.map((s) => s.item), ...newItems];
   return {
