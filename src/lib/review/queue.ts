@@ -72,7 +72,7 @@ function alternate<T>(first: readonly T[], second: readonly T[]): T[] {
  * Builds the review queue at `now` (spec §5.5). Pure, so the screen can rebuild it after every rating. That happens
  * inside a tap, so it stays quick at 10,000 words (spec §14): it compares stored times as text instead of reading a date
  * from every card (they are canonical ISO text, which `parseFile` checks and which sorts in time order), and it sorts
- * only the cards it may show, not every word.
+ * only cards that are due or new, not every word.
  */
 export function buildQueue({ words, cards, settings, now, listId }: QueueInput): Queue {
   const nowIso = now.toISOString();

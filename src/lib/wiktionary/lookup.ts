@@ -15,11 +15,10 @@ export interface LookupOptions {
   fetchFn?: FetchFn;
 }
 
-/** Bump when parsing changes what a lookup returns, so results cached by older code are ignored. */
-/** Bump when parsing changes what a lookup returns (decision 13); cache-version.test.ts notices when it must. */
+/** Bump when parsing changes what a lookup returns (M2 decision 13); cache-version.test.ts notices when it must. */
 export const CACHE_VERSION = 1;
-const wordKey = (spelling: string) => `w${CACHE_VERSION}:${spelling}`;
-const charKey = (char: string) => `c${CACHE_VERSION}:${char}`;
+const wordCacheKey = (spelling: string) => `w${CACHE_VERSION}:${spelling}`;
+const charCacheKey = (char: string) => `c${CACHE_VERSION}:${char}`;
 
 function capitalize(s: string): string {
   const [first = '', ...rest] = Array.from(s);
@@ -83,7 +82,7 @@ async function fetchPage(title: string, fetchFn: FetchFn): Promise<PageSource | 
 
 /** IPA for any text through `{{vi-IPA|…}}` (spec §6.3). */
 async function ipaFor(text: string, fetchFn: FetchFn): Promise<Ipa> {
-  // "{ } | [ ] < >" would break the template, and "=" would turn the text into a named parameter (decision 9).
+  // "{ } | [ ] < >" would break the template, and "=" would turn the text into a named parameter (M2 decision 9).
   const safe = text.replace(/[{}|[\]<>=]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!safe) return { hanoi: '', saigon: '' };
   const body = await apiGet({ action: 'expandtemplates', text: `{{vi-IPA|${safe}}}`, prop: 'wikitext' }, fetchFn);
@@ -127,7 +126,7 @@ export async function lookupWord(input: string, options: LookupOptions = {}): Pr
   if (!query) throw new Error('Type a word to look up.');
   const fetchFn = options.fetchFn ?? defaultFetch;
   if (!options.refresh) {
-    const hit = await cached<PageResult>(wordKey(query));
+    const hit = await cached<PageResult>(wordCacheKey(query));
     if (hit) return { ...hit, query };
   }
   const fetchedAt = nowIso();
@@ -153,7 +152,7 @@ export async function lookupWord(input: string, options: LookupOptions = {}): Pr
     result = { title: null, entries: [], ipaHanoi: ipa.hanoi, ipaSaigon: ipa.saigon, fetchedAt };
   }
   if (cacheable) {
-    await store(result.title ? [wordKey(query), wordKey(result.title)] : [wordKey(query)], result, fetchedAt);
+    await store(result.title ? [wordCacheKey(query), wordCacheKey(result.title)] : [wordCacheKey(query)], result, fetchedAt);
   }
   return { ...result, query };
 }
@@ -161,12 +160,12 @@ export async function lookupWord(input: string, options: LookupOptions = {}): Pr
 /** The Vietnamese part of a character page (spec §6.4), or null when there is none. Pass the traditional form. */
 export async function lookupChar(char: string, options: LookupOptions = {}): Promise<CharInfo | null> {
   if (!options.refresh) {
-    const hit = await cached<{ info: CharInfo | null }>(charKey(char));
+    const hit = await cached<{ info: CharInfo | null }>(charCacheKey(char));
     if (hit) return hit.info;
   }
   const body = await apiGet({ action: 'parse', page: char, prop: 'wikitext', redirects: '1' }, options.fetchFn ?? defaultFetch);
   const page = readParse(body);
   const info = page ? parseCharPage(page.title, page.wikitext) : null;
-  await store([charKey(char)], { info }, nowIso());
+  await store([charCacheKey(char)], { info }, nowIso());
   return info;
 }

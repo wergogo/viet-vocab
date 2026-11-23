@@ -32,7 +32,9 @@ export async function saveSettings(change: Partial<ReviewSettings>): Promise<Rev
       newCardsPerDay: change.newCardsPerDay ?? current.newCardsPerDay,
       reverseCards: change.reverseCards ?? current.reverseCards,
     };
-    if (row && next.newCardsPerDay === current.newCardsPerDay && next.reverseCards === current.reverseCards) return current;
+    // Before the first save the defaults count as stored, so saving them creates no record that sync would treat as
+    // a newer choice than another device's.
+    if (next.newCardsPerDay === current.newCardsPerDay && next.reverseCards === current.reverseCards) return current;
     await db.settings.put({ id: 'settings', ...next, updatedAt: nextTimestamp(row?.updatedAt) });
     changed = true;
     return next;

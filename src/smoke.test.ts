@@ -6,4 +6,8 @@ describe('test environment', () => {
     expect(typeof localStorage.setItem).toBe('function');
     expect(typeof crypto.randomUUID).toBe('function');
   });
+
+  it('runs in Newfoundland time (UTC−3:30), so the local-day tests can fail', () => {
+    expect(new Date(2026, 10, 22).getTimezoneOffset()).toBe(210);
+  });
 });

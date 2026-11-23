@@ -35,7 +35,11 @@ describe('review settings', () => {
     expect(dirtySeq()).toBe(before + 1);
   });
 
-  it('writes nothing when the value is unchanged', async () => {
+  it('writes nothing when the value is unchanged, the defaults included before the first save', async () => {
+    const first = dirtySeq();
+    expect(await saveSettings({ newCardsPerDay: 20, reverseCards: false })).toEqual({ newCardsPerDay: 20, reverseCards: false });
+    expect(await db.settings.count()).toBe(0);
+    expect(dirtySeq()).toBe(first);
     await saveSettings({ newCardsPerDay: 5 });
     const before = dirtySeq();
     await saveSettings({ newCardsPerDay: 5 });

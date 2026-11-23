@@ -7,7 +7,7 @@
   import type { ReviewCard } from '../../model/types';
   import { formatDueIn } from '../../review/format';
   import { rate, ratingOptions, RATINGS, type Grade, type RatingOption } from '../../review/fsrs';
-  import { buildQueue, type QueueItem } from '../../review/queue';
+  import { buildQueue, LEARN_AHEAD_MS, type QueueItem } from '../../review/queue';
   import { href } from '../router';
   import { liveCards, liveLists, liveSettings, liveWords } from '../stores';
   import AudioButton from '../components/AudioButton.svelte';
@@ -37,7 +37,7 @@
   // While reviewing, the session's own copy, so a rating's background save doesn't build the queue again.
   const cards = $derived(sessionCards ?? $liveCards);
   const queue = $derived(
-    $liveWords && cards && $liveSettings
+    $liveWords && $liveLists && cards && $liveSettings
       ? buildQueue({ words: $liveWords, cards, settings: $liveSettings, now, listId: scopeId || undefined })
       : null,
   );
@@ -140,7 +140,7 @@
     <div class="card stack">
       <label class="field">
         <span>Words to review</span>
-        <select bind:value={scope}>
+        <select value={scopeId} onchange={(e) => (scope = e.currentTarget.value)}>
           <option value="">All words</option>
           {#each $liveLists ?? [] as list (list.id)}
             <option value={list.id}>{list.name}</option>
@@ -165,7 +165,7 @@
           {#if queue.due + queue.newToday > 0}
             {queue.due} due · {queue.newToday} new
           {:else}
-            {queue.items.length} coming up in the next 20 minutes
+            {queue.items.length} coming up in the next {LEARN_AHEAD_MS / 60_000} minutes
           {/if}
         </p>
         <div class="row">

@@ -36,8 +36,9 @@ function parsedFixtures(): unknown[] {
 }
 
 describe('CACHE_VERSION', () => {
-  // Decision 13: cached lookups keep what older parsing returned until the version changes. When this test fails,
-  // parsing now returns something else: bump CACHE_VERSION in lookup.ts, then update both values below.
+  // M2 decision 13: cached lookups keep what older parsing returned until the version changes. When this test fails
+  // because parsing returns something else, bump CACHE_VERSION in lookup.ts and update both values below. A new
+  // fixture changes the digest too; then only the digest needs updating.
   it('changes whenever parsing changes what a lookup returns', () => {
     expect({ CACHE_VERSION, parsed: digest(JSON.stringify(parsedFixtures())) }).toEqual({
       CACHE_VERSION: 1,

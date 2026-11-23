@@ -52,7 +52,7 @@ export function sameLookupWord(a: string, b: string): boolean {
 
 /**
  * Whether a lookup made for `sourceWord` still belongs to the word in the form: the same word up to tone placement and
- * case, or the page the lookup led to (decision 5). The form hides a lookup that doesn't, and drops it only when
+ * case, or the page the lookup led to (M2 decision 5). The form hides a lookup that doesn't, and drops it only when
  * another lookup starts or the form is saved, so fixing a typo with backspace keeps the lookup.
  */
 export function lookupStillApplies(word: string, sourceWord: string, pageTitle?: string): boolean {

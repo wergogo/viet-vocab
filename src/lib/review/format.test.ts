@@ -18,6 +18,10 @@ describe('formatInterval', () => {
       '11y',
     ]);
   });
+
+  it('picks the unit after rounding', () => {
+    expect([59.6 * MINUTE, 23.6 * HOUR, 29.6 * DAY].map(formatInterval)).toEqual(['1h', '1d', '1mo']);
+  });
 });
 
 describe('formatDueIn', () => {
@@ -29,5 +33,10 @@ describe('formatDueIn', () => {
     expect(formatDueIn(new Date(now.getTime() + 2 * HOUR), now)).toBe('in 2 hours');
     expect(formatDueIn(new Date(2026, 10, 24, 9, 0), now)).toBe('in 2 days');
     expect(formatDueIn(new Date(2026, 10, 23, 23, 0), now)).toBe('tomorrow');
+  });
+
+  it('picks the unit after rounding', () => {
+    expect(formatDueIn(new Date(now.getTime() + 59.6 * MINUTE), now)).toBe('in 1 hour');
+    expect(formatDueIn(new Date(now.getTime() + 23.6 * HOUR), now)).toBe('tomorrow');
   });
 });

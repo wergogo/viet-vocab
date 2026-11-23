@@ -103,6 +103,8 @@ describe('buildQueue', () => {
       cards = [...cards, card(next.word.id, at(20), at(11, minute), next.direction)];
     }
     expect(shown).toEqual(['d:f', 'a:r', 'e:f', 'b:r']);
+    // Reverse cards count toward the daily limit too.
+    expect(queue({ words, cards, settings: { newCardsPerDay: 4, reverseCards: true } }).items).toEqual([]);
   });
 
   it('leaves reverse cards out while reverse cards are off', () => {
