@@ -1,4 +1,5 @@
 import { nfc } from '../text/normalize';
+import { parseHtml } from './parse';
 import { wikiToText } from './templates';
 
 export interface Ipa {
@@ -36,10 +37,9 @@ export function ipaFromItems(items: readonly Element[]): Ipa {
 
 /** The same, from the wikitext that `action=expandtemplates` returns for `{{vi-IPA|…}}` (spec §6.3). */
 export function ipaFromExpanded(wikitext: string): Ipa {
-  const parser = new DOMParser();
   const lines = wikitext
     .split('\n')
     .filter((line) => line.startsWith('*'))
-    .map((line) => readLine(parser.parseFromString(line.replace(/^\*+\s*/, ''), 'text/html').body));
+    .map((line) => readLine(parseHtml(line.replace(/^\*+\s*/, '')).body));
   return pick(lines);
 }

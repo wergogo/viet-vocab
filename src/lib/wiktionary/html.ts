@@ -1,8 +1,9 @@
 import { ipaFromItems, type Ipa } from './ipa';
+import { parseHtml } from './parse';
 import { NUMBERED_ETYMOLOGY, POS_HEADINGS } from './wikitext';
 
-// Rendered Wiktionary HTML is only read, with DOMParser, and none of it is ever inserted into the app's page
-// (spec §6.2). The parsed elements go only to the parsers; what reaches the app is text.
+// Rendered Wiktionary HTML is only read, with DOMParser (through parseHtml), and none of it is ever inserted into the
+// app's page (spec §6.2). The parsed elements go only to the parsers; what reaches the app is text.
 
 interface Heading {
   level: number;
@@ -33,7 +34,7 @@ function flatChildren(el: Element): Element[] {
 
 /** The elements of the Vietnamese section in document order, or null when the page has none. */
 export function vietnameseElements(html: string): Element[] | null {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const doc = parseHtml(html);
   const root = doc.querySelector('.mw-parser-output') ?? doc.body;
   const out: Element[] = [];
   let found = false;
