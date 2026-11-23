@@ -35,16 +35,20 @@ export const CHANGE_DELAY_MS = 5_000;
 /** …and when the app becomes visible again, at most this often. */
 export const VISIBLE_GAP_MS = 30_000;
 
-type Trigger = 'start' | 'change' | 'visible' | 'hidden' | 'online' | 'release' | 'manual' | 'settings';
+type Trigger = 'start' | 'change' | 'visible' | 'hidden' | 'review' | 'online' | 'release' | 'manual' | 'settings';
 
-/** A request queued during a cycle keeps what it may skip: a request by hand any wait, and hiding the app the hold. */
+/**
+ * A request queued during a cycle keeps what it may skip: a request by hand any wait, and hiding the app, showing it
+ * and starting a review the hold. A queued `change` must not win over those, or the hold would then drop it.
+ */
 const STRENGTH: Record<Trigger, number> = {
   start: 0,
   change: 0,
-  visible: 0,
   online: 0,
   release: 0,
+  visible: 1,
   hidden: 1,
+  review: 1,
   manual: 2,
   settings: 2,
 };
@@ -91,6 +95,7 @@ export class SyncScheduler {
     for (const remove of this.#listeners) remove();
     this.#listeners = [];
     clearTimeout(this.#timer);
+    this.#queued = null;
   }
 
   /** Sync now, from Settings: runs even after an error that stops automatic syncs, and during review. */
@@ -100,22 +105,23 @@ export class SyncScheduler {
 
   /** The sync settings changed or were removed: forget the last error, and sync with the new settings. */
   settingsChanged(): void {
-    this.#error = null;
     this.#request('settings');
   }
 
   /**
    * Holds automatic syncs while a review session runs (M4 decision 11). Hiding the app still pushes, and showing it again
-   * still pulls, so a session doesn't review cards from states another device has moved on from. Returns the release.
+   * still pulls, so a session doesn't review cards from states another device has moved on from. So does starting a
+   * session after the window stayed on screen a while: the first hold pulls first. Returns the release.
    */
   hold(): () => void {
     this.#holds++;
+    if (this.#holds === 1 && this.#deps.now() - this.#lastEnd >= VISIBLE_GAP_MS) this.#request('review');
     let holding = true;
     return () => {
       if (!holding) return;
       holding = false;
       this.#holds--;
-      if (this.#holds === 0 && this.#deps.hasChanges()) this.#request('release');
+      if (this.#holds === 0 && (this.#missed || this.#deps.hasChanges())) this.#request('release');
       else this.#settle();
     };
   }
@@ -143,8 +149,10 @@ export class SyncScheduler {
       return;
     }
     const byHand = trigger === 'manual' || trigger === 'settings';
+    // A request by hand forgets the last error, or automatic requests made while it runs would be dropped.
+    if (byHand) this.#error = null;
     if (!byHand && this.#error && stopsAutoSync(this.#error.kind)) return;
-    if (!byHand && trigger !== 'hidden' && trigger !== 'visible' && this.#holds > 0) {
+    if (!byHand && trigger !== 'hidden' && trigger !== 'visible' && trigger !== 'review' && this.#holds > 0) {
       this.#settle();
       return;
     }

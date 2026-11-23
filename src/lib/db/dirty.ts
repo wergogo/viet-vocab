@@ -1,11 +1,14 @@
 const KEY = 'vv.sync.dirty';
-/** Used when localStorage is unavailable (blocked or private mode). */
+/** Used when localStorage is unavailable (blocked or private mode) or refuses a write (full). */
 let memorySeq = 0;
+/** Set while the last write was refused: localStorage then holds an older value, and the memory one is right. */
+let writeFailed = false;
 
 /** Fires 'change' after every local edit (milestone 4 schedules a sync on it). */
 export const localChanges = new EventTarget();
 
 function readSeq(): number {
+  if (writeFailed) return memorySeq;
   try {
     const value = Number(localStorage.getItem(KEY) ?? '0');
     return Number.isFinite(value) ? value : 0;
@@ -19,8 +22,10 @@ function writeSeq(value: number): void {
   try {
     if (value === 0) localStorage.removeItem(KEY);
     else localStorage.setItem(KEY, String(value));
+    writeFailed = false;
   } catch {
-    // Keep the in-memory value.
+    // Keep the in-memory value until a write succeeds again.
+    writeFailed = true;
   }
 }
 

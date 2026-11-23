@@ -39,8 +39,11 @@ export async function saveSettings(change: Partial<ReviewSettings>): Promise<Rev
     // a newer choice than another device's.
     const names = SETTING_NAMES.filter((name) => next[name] !== current[name]);
     if (names.length === 0) return current;
-    const updatedAt = nextTimestamp(row?.updatedAt);
+    // After every time the record holds, or a hand-edited record with a later `changedAt` would win the next merge.
     const changedAt: SettingTimes = row ? { ...settingTimes(row) } : {};
+    let latest = row?.updatedAt;
+    for (const time of Object.values(changedAt)) if (latest === undefined || time > latest) latest = time;
+    const updatedAt = nextTimestamp(latest);
     for (const name of names) changedAt[name] = updatedAt;
     await db.settings.put({ id: 'settings', ...next, updatedAt, changedAt });
     changed = true;

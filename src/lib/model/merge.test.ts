@@ -141,4 +141,27 @@ describe('mergeSettings', () => {
       remoteStale: false,
     });
   });
+
+  it('treats the same times in a different key order as the same record', () => {
+    const local: Settings = { newCardsPerDay: 5, reverseCards: true, updatedAt: T2, changedAt: { newCardsPerDay: T1, reverseCards: T2 } };
+    const remote: Settings = { ...local, changedAt: { reverseCards: T2, newCardsPerDay: T1 } };
+    const r = mergeSettings(local, remote);
+    expect(r.applyLocal).toBe(false);
+    expect(r.remoteStale).toBe(false);
+  });
+
+  it('settles after a round trip between two devices that each changed a different setting', () => {
+    const a: Settings = { newCardsPerDay: 10, reverseCards: false, updatedAt: T2, changedAt: { newCardsPerDay: T2 } };
+    const b: Settings = { newCardsPerDay: 20, reverseCards: true, updatedAt: T3, changedAt: { reverseCards: T3 } };
+    // A merges B's record from the file and would push the result.
+    const first = mergeSettings(a, b);
+    expect(first.remoteStale).toBe(true);
+    // B merges A's result, then A merges B's.
+    const second = mergeSettings(b, first.merged);
+    const third = mergeSettings(first.merged, second.merged);
+    expect(third.applyLocal).toBe(false);
+    expect(third.remoteStale).toBe(false);
+    expect(third.merged).toMatchObject({ newCardsPerDay: 10, reverseCards: true });
+    expect(second.merged).toMatchObject({ newCardsPerDay: 10, reverseCards: true });
+  });
 });

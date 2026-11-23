@@ -7,6 +7,7 @@ import { parseFile, SCHEMA_VERSION, serializeFile } from '../model/file';
 import { tombstone, type Rec, type Word } from '../model/types';
 import { fileKey, lastSync } from './config';
 import { checkConnection, runSyncCycle } from './cycle';
+import type { FetchFn } from './github';
 import { fakeGitHub, TEST_CONFIG, type FakeGitHub } from './test-helpers';
 
 const T1 = '2026-11-01T00:00:00.000Z';
@@ -124,6 +125,24 @@ describe('runSyncCycle', () => {
     github.beforePut = null;
     await sync();
     expect(remoteFile().words).toHaveLength(2);
+    expect(isDirty()).toBe(false);
+  });
+
+  it('keeps the changes waiting when the push fails after the merge, and pushes them on the next sync', async () => {
+    await sync();
+    const last = lastSync.get();
+    await createWord(emptyDraft('nhập khẩu'));
+    // The pull and the merge go well; the upload gets a server error.
+    const failingPut: FetchFn = (url, init) => {
+      if (init?.method === 'PUT') github.failNext(503);
+      return github.fetch(url, init);
+    };
+    await expect(runSyncCycle(TEST_CONFIG, { fetchFn: failingPut, now: () => NOW })).rejects.toMatchObject({ kind: 'server' });
+    expect(isDirty()).toBe(true);
+    expect(lastSync.get()).toEqual(last);
+    expect(remoteFile().words).toHaveLength(0);
+    await sync();
+    expect(remoteFile().words).toHaveLength(1);
     expect(isDirty()).toBe(false);
   });
 

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RecordNotFoundError } from '../db/errors';
 import { fsrsState } from '../model/test-helpers';
-import type { ReviewCard, ReviewSettings, Word } from '../model/types';
-import { RATINGS, ratingOptions } from './fsrs';
+import type { ReviewCard, ReviewSettings, SerializedFsrsCard, Word } from '../model/types';
+import { rate, RATINGS, ratingOptions } from './fsrs';
 import { buildQueue } from './queue';
 import { ReviewSession } from './session.svelte';
 
@@ -34,11 +34,11 @@ function setup(words: Word[], settings: ReviewSettings = { newCardsPerDay: 20, r
   let clock = NOW;
   let autoplay = true;
   const played: string[] = [];
-  const saves: { wordId: string; resolve: () => void; reject: (e: unknown) => void }[] = [];
+  const saves: { wordId: string; fsrs: SerializedFsrsCard; resolve: () => void; reject: (e: unknown) => void }[] = [];
   const sync = { holds: 0, releases: 0 };
   const session = new ReviewSession({
     next: (cards) => buildQueue({ words, cards, settings, now: clock }).items[0] ?? null,
-    save: (wordId) => new Promise<void>((resolve, reject) => saves.push({ wordId, resolve, reject })),
+    save: (wordId, _direction, fsrs) => new Promise<void>((resolve, reject) => saves.push({ wordId, fsrs, resolve, reject })),
     pronounce: (item) => played.push(`${item.direction} ${item.word.id}`),
     autoplay: () => autoplay,
     now: () => clock,
@@ -189,8 +189,17 @@ describe('ReviewSession', () => {
     expect(played).toEqual(['forward a']);
   });
 
+  it('moves on when the stored copy has the same updatedAt but another review state (a merge tie)', () => {
+    const { session } = setup([word('a'), word('b')]);
+    session.start([card('a', YESTERDAY), card('b', YESTERDAY)]);
+    expect(session.current).toMatchObject({ word: { id: 'a' } });
+    const tied = card('a', '2026-12-22T00:00:00.000Z');
+    session.mergeStored([{ ...tied, fsrs: { ...tied.fsrs, reps: 3 } }]);
+    expect(session.current).toMatchObject({ word: { id: 'b' } });
+  });
+
   it('rates the card on screen from its new state when it was reviewed elsewhere after its answer showed', () => {
-    const { session, later } = setup([word('a')]);
+    const { session, later, saves } = setup([word('a')]);
     session.start([card('a', YESTERDAY)]);
     session.reveal();
     later(5000);
@@ -203,6 +212,8 @@ describe('ReviewSession', () => {
     expect(session.revealed).toBe(true);
     expect(session.options).toEqual(ratingOptions(elsewhere.fsrs, session.revealedAt));
     expect(session.revealedAt).toEqual(new Date(NOW.getTime() + 5000));
+    session.rate(GOOD);
+    expect(saves[0]!.fsrs).toEqual(rate(elsewhere.fsrs, GOOD, new Date(NOW.getTime() + 5000)));
   });
 
   it('plays nothing with autoplay off', () => {

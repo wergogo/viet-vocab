@@ -2,8 +2,12 @@ import type { SyncConfig } from './config';
 import { blobSha, toBase64 } from './encoding';
 import { SyncError } from './errors';
 
-/** GitHub's REST API. Browser checks point it at a local stand-in with `VITE_GITHUB_API` (M4 decision 17). */
-export const GITHUB_API: string = import.meta.env.VITE_GITHUB_API || 'https://api.github.com';
+/**
+ * GitHub's REST API. Browser checks point it at a local stand-in with `VITE_GITHUB_API`, in fake-sync mode only (M4
+ * decision 17), so a stray variable in a production build can't send tokens elsewhere.
+ */
+export const GITHUB_API: string =
+  (import.meta.env.MODE === 'fake-sync' && import.meta.env.VITE_GITHUB_API) || 'https://api.github.com';
 
 const READ_TIMEOUT_MS = 30_000;
 /** Uploading a large file over a slow phone connection takes a while. */
@@ -96,8 +100,9 @@ export class GitHubFiles {
         `GitHub can't find ${where}, or the token can't reach it. Check the owner and repository names, and that the token was given this repository.`,
       );
     }
-    // 409: the sha the push named is no longer the file's. 422 to a create: the file appeared meanwhile.
-    if (status === 409 || (status === 422 && action === 'create')) {
+    // 409: the sha the push named is no longer the file's. 422 to a create that speaks of the sha: the file appeared
+    // meanwhile. Any other 422 (a branch that is gone, say) won't change on a retry.
+    if (status === 409 || (status === 422 && action === 'create' && (message === '' || /\bsha\b/i.test(message)))) {
       return new SyncError('conflict', `${this.#config.path} changed on GitHub during the sync.`);
     }
     if (status === 422) return new SyncError('unexpected', `GitHub refused the upload${message ? `: ${message}` : '.'}`);
@@ -112,7 +117,11 @@ export class GitHubFiles {
   async checkRepository(): Promise<void> {
     const repo = await this.#send(this.#repoUrl(), { headers: { Accept: 'application/vnd.github+json' } });
     if (!repo.ok) throw await this.#failure(repo);
-    if ((await readJson(repo))?.private !== true) {
+    const isPrivate = (await readJson(repo))?.private;
+    if (typeof isPrivate !== 'boolean') {
+      throw new SyncError('unexpected', `GitHub's answer about ${this.#repoName} couldn't be read.`);
+    }
+    if (isPrivate === false) {
       throw new SyncError(
         'public-repo',
         `${this.#repoName} is public, so anyone could read your words. Make it private on GitHub, or sync with a private repository.`,

@@ -144,6 +144,40 @@ describe('SyncScheduler', () => {
     expect(s.runCycle).toHaveBeenCalledTimes(2);
   });
 
+  it('pulls first when a review session starts 30 s or more after the last cycle', async () => {
+    const s = setup();
+    s.scheduler.start();
+    await s.finish();
+    vi.advanceTimersByTime(VISIBLE_GAP_MS);
+    s.scheduler.hold();
+    expect(s.runCycle).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not pull when a review session starts sooner after the last cycle', async () => {
+    const s = setup();
+    s.scheduler.start();
+    await s.finish();
+    vi.advanceTimersByTime(VISIBLE_GAP_MS - 1000);
+    s.scheduler.hold();
+    expect(s.runCycle).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a request for the app being shown over a queued change, so the hold does not drop it', async () => {
+    const s = setup();
+    s.scheduler.start();
+    await s.finish();
+    s.edit();
+    vi.advanceTimersByTime(CHANGE_DELAY_MS);
+    expect(s.runCycle).toHaveBeenCalledTimes(2);
+    s.edit();
+    vi.advanceTimersByTime(CHANGE_DELAY_MS);
+    s.scheduler.hold();
+    vi.advanceTimersByTime(VISIBLE_GAP_MS);
+    s.fire('document', 'visibilitychange');
+    await s.finish();
+    expect(s.runCycle).toHaveBeenCalledTimes(3);
+  });
+
   it('pushes at once when the app is hidden with changes waiting, even during review (M4 decision 10)', async () => {
     const s = setup();
     s.scheduler.start();
@@ -210,6 +244,32 @@ describe('SyncScheduler', () => {
     expect(s.runCycle).toHaveBeenCalledTimes(3);
     await s.finish();
     expect(s.status()).toEqual({ state: 'idle' });
+  });
+
+  it('queues an edit made during a run by hand after an error that stops automatic syncs', async () => {
+    const s = setup();
+    s.scheduler.start();
+    await s.finish(new SyncError('auth', 'GitHub refused the token.'));
+    s.scheduler.syncNow();
+    expect(s.runCycle).toHaveBeenCalledTimes(2);
+    s.edit();
+    vi.advanceTimersByTime(CHANGE_DELAY_MS);
+    await s.finish();
+    expect(s.runCycle).toHaveBeenCalledTimes(3);
+  });
+
+  it('syncs on release when a sync was missed offline during the hold', async () => {
+    const s = setup();
+    s.scheduler.start();
+    await s.finish();
+    vi.advanceTimersByTime(VISIBLE_GAP_MS);
+    s.device.online = false;
+    const release = s.scheduler.hold();
+    s.device.online = true;
+    s.fire('window', 'online');
+    expect(s.runCycle).toHaveBeenCalledTimes(1);
+    release();
+    expect(s.runCycle).toHaveBeenCalledTimes(2);
   });
 
   it('runs new settings saved during a cycle, even when that cycle fails in a way that stops syncing', async () => {

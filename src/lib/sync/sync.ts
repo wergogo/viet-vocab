@@ -14,7 +14,11 @@ const scheduler = new SyncScheduler({
   hasChanges: isDirty,
   runCycle: async () => {
     const config = syncConfig.get();
-    if (config) await runSyncCycle(config);
+    if (!config) return;
+    await runSyncCycle(config);
+    // Stop syncing was pressed during the cycle: don't leave its result, or a later setup of the same repository
+    // would skip the repository check (M4 decision 4).
+    if (syncConfig.get() === null) lastSync.set(null);
   },
   withLock: withSyncLock,
   online: () => navigator.onLine,
@@ -28,11 +32,14 @@ const scheduler = new SyncScheduler({
 /** What Settings and the tab bar show about sync. */
 export const syncStatus = scheduler.status;
 
+let unsubscribe: (() => void) | undefined;
+
 /** Starts syncing (spec §7.4: on app start), and follows sync settings changed here or in another tab. */
 export function startSync(): void {
+  if (unsubscribe) return;
   scheduler.start();
   let first = true;
-  syncConfig.subscribe(() => {
+  unsubscribe = syncConfig.subscribe(() => {
     if (first) first = false;
     else scheduler.settingsChanged();
   });

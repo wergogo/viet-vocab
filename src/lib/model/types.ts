@@ -95,9 +95,6 @@ export type SettingName = keyof ReviewSettings;
 /** When each setting was last changed. */
 export type SettingTimes = Partial<Record<SettingName, ISO>>;
 
-/** Every setting, in a fixed order. */
-export const SETTING_NAMES: readonly SettingName[] = ['newCardsPerDay', 'reverseCards'];
-
 export interface Tombstone {
   id: string;
   updatedAt: ISO;
@@ -121,3 +118,6 @@ export const DEFAULT_SETTINGS: Readonly<ReviewSettings> = {
   newCardsPerDay: 20,
   reverseCards: false,
 };
+
+/** Every setting, in a fixed order. `DEFAULT_SETTINGS` must name each one, so none can be left out. */
+export const SETTING_NAMES = Object.keys(DEFAULT_SETTINGS) as readonly SettingName[];

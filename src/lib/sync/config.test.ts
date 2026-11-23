@@ -38,12 +38,27 @@ describe('configProblems', () => {
     }
     for (const token of ['', 'two words']) expect(configProblems({ ...good, token })).toHaveProperty('token');
   });
+
+  it('accepts only printable ASCII in a token, so fetch can send it in a header', () => {
+    expect(configProblems({ ...good, token: '' }).token).toBe('Paste the token from GitHub.');
+    const hidden = `github_pat_${String.fromCharCode(0x200b)}abc`;
+    for (const token of [hidden, 'tökén', 'a b']) {
+      expect(configProblems({ ...good, token }).token).toBe(
+        "The token has a character GitHub tokens don't have. Paste it again from GitHub.",
+      );
+    }
+    expect(configProblems({ ...good, token: 'ghp_AZaz09_-~!' })).toEqual({});
+  });
 });
 
 describe('tokens and keys', () => {
   it('recognizes classic tokens', () => {
     expect(isClassicToken('ghp_abc')).toBe(true);
     expect(isClassicToken('github_pat_abc')).toBe(false);
+    expect(isClassicToken('gho_abc')).toBe(true);
+    expect(isClassicToken('ghu_abc')).toBe(true);
+    expect(isClassicToken('0123456789abcdef0123456789abcdef01234567')).toBe(true);
+    expect(isClassicToken('0123456789abcdef0123456789abcdef0123456')).toBe(false);
   });
 
   it('names the file without regard to the case of owner and repository', () => {
@@ -71,6 +86,8 @@ describe('stored settings', () => {
       expect(syncConfig.get()).toBeNull();
     }
     localStorage.setItem('vv.sync.last', JSON.stringify({ key: 'k', sha: 's', records: -1, at: 't' }));
+    expect(lastSync.get()).toBeNull();
+    localStorage.setItem('vv.sync.last', JSON.stringify({ key: 'k', sha: 's', records: 1, at: 'not a date' }));
     expect(lastSync.get()).toBeNull();
   });
 });

@@ -66,13 +66,18 @@ export function configProblems(c: SyncConfig): ConfigProblems {
   }
   if (!isBranchName(c.branch)) problems.branch = 'Enter a branch name, such as main.';
   if (!isFilePath(c.path)) problems.path = "Enter the file's path in the repository, such as vocab.json.";
-  if (!/^\S+$/.test(c.token)) problems.token = 'Paste the token from GitHub.';
+  // Printable ASCII only: fetch throws on any other character in the Authorization header, and that would show as a
+  // network error for good.
+  if (c.token === '') problems.token = 'Paste the token from GitHub.';
+  else if (!/^[!-~]+$/.test(c.token)) {
+    problems.token = "The token has a character GitHub tokens don't have. Paste it again from GitHub.";
+  }
   return problems;
 }
 
 /** A classic token reaches every repository of the account; a fine-grained one can be limited to the data repository. */
 export function isClassicToken(token: string): boolean {
-  return token.startsWith('ghp_');
+  return /^(?:ghp_|gho_|ghu_)/.test(token) || /^[0-9a-f]{40}$/.test(token);
 }
 
 /** Names the file a sync went to. GitHub matches owner and repository names in any case, but not branches or paths. */
@@ -100,7 +105,7 @@ function toConfig(text: string | null): SyncConfig | null {
 
 function toLastSync(text: string | null): LastSync | null {
   const v = readJson(text);
-  if (!v || !isText(v.key) || !isText(v.sha) || !isText(v.at)) return null;
+  if (!v || !isText(v.key) || !isText(v.sha) || !isText(v.at) || !Number.isFinite(Date.parse(v.at))) return null;
   if (typeof v.records !== 'number' || !Number.isInteger(v.records) || v.records < 0) return null;
   return { key: v.key, sha: v.sha, records: v.records, at: v.at };
 }

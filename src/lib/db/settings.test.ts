@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, resetDb } from './db';
 import { dirtySeq } from './dirty';
+import { mergeSettings } from '../model/merge';
 import { getSettings, saveSettings } from './settings';
 
 beforeEach(async () => {
@@ -79,5 +80,20 @@ describe('review settings', () => {
     });
     await expect(saveSettings({ reverseCards: 'yes' as unknown as boolean })).rejects.toThrow(TypeError);
     expect(await getSettings()).toEqual({ newCardsPerDay: 7, reverseCards: true });
+  });
+
+  it('stamps a change after the latest time the record holds, so it wins the next merge', async () => {
+    const original = {
+      id: 'settings' as const,
+      newCardsPerDay: 30,
+      reverseCards: false,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      changedAt: { newCardsPerDay: '2027-01-01T00:00:00.000Z', reverseCards: '2026-01-01T00:00:00.000Z' },
+    };
+    await db.settings.put(original);
+    await saveSettings({ newCardsPerDay: 10 });
+    const stored = await db.settings.get('settings');
+    expect(stored!.changedAt!.newCardsPerDay! > '2027-01-01T00:00:00.000Z').toBe(true);
+    expect(mergeSettings(stored, original).merged!.newCardsPerDay).toBe(10);
   });
 });

@@ -47,4 +47,20 @@ describe('dirty flag', () => {
       spies.forEach((s) => s.mockRestore());
     }
   });
+
+  it('keeps counting in memory after localStorage refuses a write, until a write succeeds again', () => {
+    const full = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError');
+    });
+    try {
+      markDirty();
+      expect(isDirty()).toBe(true);
+    } finally {
+      full.mockRestore();
+    }
+    clearDirty(dirtySeq());
+    expect(isDirty()).toBe(false);
+    markDirty();
+    expect(localStorage.getItem('vv.sync.dirty')).toBe('1');
+  });
 });

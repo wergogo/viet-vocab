@@ -1,7 +1,8 @@
 // A stand-in for the parts of GitHub's REST API that sync uses, so sync can be tried in the browser without a GitHub
 // repository or token (M4 decision 17). Files live in memory: restarting starts over.
 //
-//   npm run fake-github      listens on http://localhost:8787
+//   npm run fake-github      listens on http://localhost:8787, on this computer only (its files are open to anyone
+//                            who can reach it, so it takes no connections from the network)
 //   npm run dev:fake-sync    the app on http://localhost:5174, syncing with it (.env.fake-sync)
 //
 // Two origins, such as http://a.localhost:5174 and http://b.localhost:5174, keep separate data, like two devices.
@@ -56,7 +57,13 @@ const server = createServer(async (req, res) => {
     return send(res, 200, file, { 'Content-Type': 'application/vnd.github.raw+json; charset=utf-8', ETag: `"${sha}"` });
   }
   if (req.method === 'PUT') {
-    const body = JSON.parse(await readBody(req));
+    let body;
+    try {
+      body = JSON.parse(await readBody(req));
+    } catch {
+      body = null;
+    }
+    if (typeof body !== 'object' || body === null || Array.isArray(body)) return json(res, 400, { message: 'Problems parsing JSON' });
     const key = `${owner}/${repo}@${body.branch ?? 'main'}:${rest}`.toLowerCase();
     const current = files.get(key);
     if (current && !body.sha) return json(res, 422, { message: 'Invalid request. "sha" wasn\'t supplied.' });
@@ -68,4 +75,4 @@ const server = createServer(async (req, res) => {
   return json(res, 405, { message: 'Method not allowed' });
 });
 
-server.listen(port, () => console.log(`Fake GitHub API on http://localhost:${port}`));
+server.listen(port, 'localhost', () => console.log(`Fake GitHub API on http://localhost:${port}`));

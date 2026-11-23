@@ -5,7 +5,10 @@ import { rate, ratingOptions, type Grade, type RatingOption } from './fsrs';
 import type { QueueItem } from './queue';
 
 export interface SessionDeps {
-  /** The first card of the queue built over `cards` at this moment, or null when nothing waits. */
+  /**
+   * The first card of the queue built over `cards` at this moment, or null when nothing waits. The session always
+   * passes its current `cards`, so the screen may use a queue it has already built over them.
+   */
   next: (cards: readonly ReviewCard[]) => QueueItem | null;
   /** Stores a rating (db/cards.ts saveReview). */
   save: (wordId: string, direction: Direction, fsrs: SerializedFsrsCard, reviewedAt: Date) => Promise<unknown>;
@@ -91,7 +94,8 @@ export class ReviewSession {
   }
 
   /**
-   * Takes in cards stored meanwhile, by a sync or another tab, when they are newer than the session's copy. Cards rated
+   * Takes in cards stored meanwhile, by a sync or another tab, when they are newer than the session's copy, or have the
+   * same time but another review state (a merge tie applies the remote copy, M4 decision 7). Cards rated
    * in this session are skipped: their stored copy is the session's own rating, stamped a little later (roadmap M4).
    * When the card on screen is one of them, it was reviewed on another device meanwhile, so a rating made from its old
    * state would undo that review (M4 decision 12). Before the answer shows, the session moves to the next card; after,
@@ -104,7 +108,11 @@ export class ReviewSession {
     for (const card of stored) {
       if (this.#rated.has(card.id)) continue;
       const mine = byId.get(card.id);
-      if (mine && mine.updatedAt >= card.updatedAt) continue;
+      if (mine && mine.updatedAt >= card.updatedAt) {
+        // Cheap on purpose: every unchanged card ties on every emission, so whole cards aren't compared.
+        const tied = mine.updatedAt === card.updatedAt;
+        if (!tied || (card.fsrs.reps === mine.fsrs.reps && card.fsrs.due === mine.fsrs.due)) continue;
+      }
       byId.set(card.id, card);
       changed.add(card.id);
     }

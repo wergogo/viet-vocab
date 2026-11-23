@@ -97,6 +97,16 @@ describe('GitHubFiles.checkRepository', () => {
       message: expect.stringContaining('add a README'),
     });
   });
+
+  it("doesn't take an answer it can't read for a public repository", async () => {
+    const check = (repo: Response) => new GitHubFiles(TEST_CONFIG, repoAnswers(repo)).checkRepository();
+    await expect(check(new Response('<html>', { status: 200 }))).rejects.toMatchObject({
+      kind: 'unexpected',
+      message: "GitHub's answer about me/viet-vocab-data couldn't be read.",
+    });
+    await expect(check(json(200, { private: 'no' }))).rejects.toMatchObject({ kind: 'unexpected' });
+    await expect(check(json(200, { private: false }))).rejects.toMatchObject({ kind: 'public-repo' });
+  });
 });
 
 describe('GitHubFiles.push', () => {
@@ -128,6 +138,13 @@ describe('GitHubFiles.push', () => {
     await expect(push(422, 'old', { message: 'Branch not found' })).rejects.toMatchObject({
       kind: 'unexpected',
       message: 'GitHub refused the upload: Branch not found',
+    });
+    await expect(push(422, null, { message: 'Branch not found' })).rejects.toMatchObject({
+      kind: 'unexpected',
+      message: 'GitHub refused the upload: Branch not found',
+    });
+    await expect(push(422, null, { message: `Invalid request. "sha" wasn't supplied.` })).rejects.toMatchObject({
+      kind: 'conflict',
     });
   });
 
