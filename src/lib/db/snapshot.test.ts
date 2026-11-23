@@ -8,7 +8,15 @@ import { isDirty } from './dirty';
 import { createList } from './lists';
 import { findDuplicates, searchWords } from './search';
 import { expectDerivedFieldsFresh } from './test-utils';
-import { countLocalRecords, exportJson, importJson, mergeIntoLocal, readLocalData } from './snapshot';
+import {
+  countLocalRecords,
+  exportJson,
+  importFile,
+  importJson,
+  ImportTooLargeError,
+  mergeIntoLocal,
+  readLocalData,
+} from './snapshot';
 import { createWord, deleteWord, emptyDraft, getWord, listLiveWords } from './words';
 
 const T1 = '2026-01-01T00:00:00.000Z';
@@ -69,6 +77,25 @@ describe('importJson', () => {
     await expect(importJson('{}')).rejects.toBeInstanceOf(FileFormatError);
     const newer = JSON.stringify({ app: 'viet-vocab', schemaVersion: 99, savedAt: T1, words: [], lists: [], cards: [] });
     await expect(importJson(newer)).rejects.toBeInstanceOf(NewerSchemaError);
+  });
+});
+
+describe('importFile', () => {
+  const file = () => new Blob([serializeFile({ words: [remoteWord], lists: [], cards: [] }, T1)]);
+
+  it('refuses a file over the size limit without reading it (spec §11)', async () => {
+    const big = file();
+    const read = vi.spyOn(big, 'text');
+    await expect(importFile(big, big.size - 1)).rejects.toBeInstanceOf(ImportTooLargeError);
+    expect(read).not.toHaveBeenCalled();
+    expect(await listLiveWords()).toEqual([]);
+    expect(isDirty()).toBe(false);
+  });
+
+  it('imports a file within the limit, as importJson does', async () => {
+    const small = file();
+    expect(await importFile(small, small.size)).toEqual({ applied: 1 });
+    expect(await getWord(remoteWord.id)).toEqual(remoteWord);
   });
 });
 

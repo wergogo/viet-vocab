@@ -83,3 +83,20 @@ export async function importJson(text: string): Promise<{ applied: number }> {
   if (applied > 0) markDirty();
   return { applied };
 }
+
+/** The largest file Import reads (spec §5.6). A sync file with 10,000 words is about 15–20 MB. */
+export const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
+
+/** A file over the import limit, refused before it is read (spec §11). */
+export class ImportTooLargeError extends Error {
+  constructor() {
+    super("That file is over 50 MB, so it wasn't imported. Nothing was changed.");
+    this.name = 'ImportTooLargeError';
+  }
+}
+
+/** Imports a chosen file as importJson does. One over `maxBytes` is refused unread, so a huge file can't stall the app. */
+export async function importFile(file: Blob, maxBytes: number = MAX_IMPORT_BYTES): Promise<{ applied: number }> {
+  if (file.size > maxBytes) throw new ImportTooLargeError();
+  return importJson(await file.text());
+}

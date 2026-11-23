@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { exportJson, importJson } from '../../db/snapshot';
+  import { exportJson, importFile, ImportTooLargeError } from '../../db/snapshot';
   import { localDate } from '../../model/dates';
   import { FileFormatError, NewerSchemaError } from '../../model/file';
 
@@ -28,12 +28,12 @@
     if (!file) return;
     message = 'Importing…';
     try {
-      const { applied } = await importJson(await file.text());
+      const { applied } = await importFile(file);
       message = applied > 0 ? `Updated ${applied} record${applied === 1 ? '' : 's'}.` : 'Nothing new in that file.';
     } catch (e) {
       console.error(e);
       message =
-        e instanceof FileFormatError || e instanceof NewerSchemaError
+        e instanceof FileFormatError || e instanceof NewerSchemaError || e instanceof ImportTooLargeError
           ? e.message
           : 'Import failed, so nothing was changed.';
     } finally {
