@@ -1,9 +1,10 @@
 <script lang="ts">
   import { searchWords, type SortMode } from '../../db/search';
+  import { buildQueue } from '../../review/queue';
   import { cjkChars, hasCjk } from '../../text/cjk';
   import { charVariants, loadStTable, type StTable } from '../../text/variants';
   import { href } from '../router';
-  import { liveLists, liveWords } from '../stores';
+  import { liveCards, liveLists, liveSettings, liveWords } from '../stores';
   import WordRowItem from '../components/WordRowItem.svelte';
 
   /** Rows rendered per page; the count still reflects every match. */
@@ -57,6 +58,24 @@
           : `${results.length} ${results.length === 1 ? 'word' : 'words'}`,
   );
 
+  // Cards come due as time passes, so the review chip recounts every minute (spec §5.1).
+  let now = $state(new Date());
+  $effect(() => {
+    const timer = setInterval(() => (now = new Date()), 60_000);
+    return () => clearInterval(timer);
+  });
+  const toReview = $derived.by(() => {
+    if (!$liveWords || !$liveCards || !$liveSettings) return 0;
+    const queue = buildQueue({
+      words: $liveWords,
+      cards: $liveCards,
+      settings: $liveSettings,
+      now,
+      listId: effectiveListId || undefined,
+    });
+    return queue.due + queue.newToday;
+  });
+
   function resetLimit() {
     limit = PAGE;
   }
@@ -93,6 +112,12 @@
       <option value="az">A–Z</option>
     </select>
   </div>
+
+  {#if toReview > 0}
+    <a class="chip review" href={href({ name: 'review', listId: effectiveListId || undefined })}>
+      <span aria-hidden="true">📇</span> {toReview} to review
+    </a>
+  {/if}
 
   {#if queryChars.length === 1}
     <a class="chip" href={href({ name: 'char', char: queryChars[0]! })}>
@@ -133,6 +158,7 @@
 
 <style>
   .row select { flex: 1; }
+  .chip.review { align-self: flex-start; }
   .count, .note { margin: 0; font-size: 14px; }
   .card p, p { margin: 0; }
 </style>
