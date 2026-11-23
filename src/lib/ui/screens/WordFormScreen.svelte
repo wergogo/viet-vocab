@@ -69,9 +69,9 @@
 
   const duplicates = $derived(findDuplicates($liveWords ?? [], draft.word, editId));
 
-  // Decision 5: a lookup belongs to one word. While the word is retyped as another, the lookup, its page link and its
-  // recording are hidden; they are dropped when a lookup starts for the new word, and left out if the form is saved,
-  // so fixing a typo with backspace keeps them.
+  // M2 decision 5: a lookup belongs to one word. While the word is retyped as another, the lookup, its page link and
+  // its recording are hidden; they are dropped when a lookup starts for the new word, and left out if the form is
+  // saved, so fixing a typo with backspace keeps them.
   const lookupCurrent = $derived(lookupStillApplies(draft.word, sourceWord, draft.source?.wiktionaryTitle));
 
   /** Drops a lookup made for another word, with the page link and recording it filled in. */
@@ -144,7 +144,7 @@
     saving = true;
     try {
       const plain = $state.snapshot(draft);
-      // Decision 5: the page link and recording of another word aren't saved with this one.
+      // M2 decision 5: the page link and recording of another word aren't saved with this one.
       if (!lookupCurrent) {
         plain.source = undefined;
         plain.audioFile = undefined;
