@@ -79,10 +79,24 @@ export interface Settings {
   newCardsPerDay: number;
   reverseCards: boolean;
   updatedAt: ISO;
+  /**
+   * When each setting was last changed, so a merge keeps the latest change of each (M4 decision 8). A record from
+   * before M4 has none, and all of its settings count as changed at `updatedAt`. In a record that has it, a setting it
+   * doesn't name was never changed.
+   */
+  changedAt?: SettingTimes;
 }
 
-/** The settings the user edits; `updatedAt` is stamped on save. */
-export type ReviewSettings = Omit<Settings, 'updatedAt'>;
+/** The settings the user edits; `updatedAt` and `changedAt` are stamped on save. */
+export type ReviewSettings = Omit<Settings, 'updatedAt' | 'changedAt'>;
+
+export type SettingName = keyof ReviewSettings;
+
+/** When each setting was last changed. */
+export type SettingTimes = Partial<Record<SettingName, ISO>>;
+
+/** Every setting, in a fixed order. */
+export const SETTING_NAMES: readonly SettingName[] = ['newCardsPerDay', 'reverseCards'];
 
 export interface Tombstone {
   id: string;

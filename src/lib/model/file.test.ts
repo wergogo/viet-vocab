@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FileFormatError, NewerSchemaError, SCHEMA_VERSION, parseFile, serializeFile, type VocabData } from './file';
+import { FileFormatError, NewerSchemaError, SCHEMA_VERSION, parseFile, serializeFile, wordSource, type VocabData } from './file';
 import { fsrsState } from './test-helpers';
 import { tombstone } from './types';
 
@@ -68,10 +68,20 @@ describe('parseFile errors', () => {
     const bad = [
       { newCardsPerDay: '20', reverseCards: false, updatedAt: T },
       { newCardsPerDay: 20, reverseCards: false, updatedAt: 'later' },
+      { newCardsPerDay: 20, reverseCards: false, updatedAt: T, changedAt: [] },
+      { newCardsPerDay: 20, reverseCards: false, updatedAt: T, changedAt: { reverseCards: 'later' } },
     ];
     for (const settings of bad) {
       expect(() => parseFile(JSON.stringify({ ...base, settings }))).toThrow(FileFormatError);
     }
+  });
+
+  it('accepts settings with or without the time each setting was changed (M4 decision 8)', () => {
+    const base = { app: 'viet-vocab', schemaVersion: 1, savedAt: T, words: [], lists: [], cards: [] };
+    const settings = { newCardsPerDay: 20, reverseCards: true, updatedAt: T, changedAt: { reverseCards: T } };
+    expect(parseFile(JSON.stringify({ ...base, settings })).settings).toEqual(settings);
+    const { changedAt: _changedAt, ...older } = settings;
+    expect(parseFile(JSON.stringify({ ...base, settings: older })).settings).toEqual(older);
   });
 });
 
@@ -238,5 +248,14 @@ describe('serializeFile round trips', () => {
   it('round-trips card tombstones with their wordId', () => {
     const file = parseFile(serializeFile({ words: [], lists: [], cards: [tombstone('w1:f', T, 'w1')] }, T));
     expect(file.cards).toEqual([{ id: 'w1:f', updatedAt: T, deleted: true, wordId: 'w1' }]);
+  });
+});
+
+describe('wordSource', () => {
+  it('keeps a canonical fetch time, writes any other valid one canonically, and falls back to now', () => {
+    const now = new Date('2026-11-22T08:00:00.000Z');
+    expect(wordSource('nhập khẩu', T, now)).toEqual({ wiktionaryTitle: 'nhập khẩu', fetchedAt: T });
+    expect(wordSource('nhập', '2026-01-01T07:00:00+07:00', now).fetchedAt).toBe(T);
+    expect(wordSource('nhập', 'not a time', now).fetchedAt).toBe('2026-11-22T08:00:00.000Z');
   });
 });

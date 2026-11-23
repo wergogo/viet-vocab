@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { mergeRecords, mergeSingle } from './merge';
+import { mergeRecords, mergeSettings } from './merge';
+import type { Settings } from './types';
 
 type R = { id: string; updatedAt: string; v?: string; deleted?: true };
 const T1 = '2026-01-01T00:00:00.000Z';
@@ -34,12 +35,20 @@ describe('mergeRecords', () => {
     expect(r.remoteStale).toBe(false);
   });
 
-  it('treats equal timestamps as identical and keeps the remote copy', () => {
+  it('keeps the remote copy on a tie, and applies it locally when the content differs (M4 decision 7)', () => {
     const remote = { id: 'a', updatedAt: T1, v: 'remote' };
     const r = mergeRecords<R>([{ id: 'a', updatedAt: T1, v: 'local' }], [remote]);
     expect(r.merged[0]).toBe(remote);
-    expect(r.toApply).toEqual([]);
+    expect(r.toApply).toEqual([remote]);
     expect(r.remoteStale).toBe(false);
+  });
+
+  it('applies nothing on a tie between copies with the same content, whatever their key order', () => {
+    const same = mergeRecords([{ id: 'a', updatedAt: T1, v: { x: 1, y: [1, 2] } }], [{ v: { y: [1, 2], x: 1 }, updatedAt: T1, id: 'a' }]);
+    expect(same.toApply).toEqual([]);
+    expect(same.remoteStale).toBe(false);
+    const reordered = mergeRecords([{ id: 'a', updatedAt: T1, v: [1, 2] }], [{ id: 'a', updatedAt: T1, v: [2, 1] }]);
+    expect(reordered.toApply).toHaveLength(1);
   });
 
   it('lets a newer deletion beat an older edit', () => {
@@ -85,18 +94,51 @@ describe('mergeRecords', () => {
   });
 });
 
-describe('mergeSingle', () => {
-  const s = (updatedAt: string, n: number) => ({ updatedAt, newCardsPerDay: n });
+describe('mergeSettings', () => {
+  /** A settings record as saved before M4, without the time of each change. */
+  const older = (updatedAt: string, newCardsPerDay: number, reverseCards = false): Settings => ({ newCardsPerDay, reverseCards, updatedAt });
 
   it('handles missing sides', () => {
-    expect(mergeSingle(undefined, undefined)).toEqual({ winner: undefined, applyLocal: false, remoteStale: false });
-    expect(mergeSingle(s(T1, 5), undefined)).toEqual({ winner: s(T1, 5), applyLocal: false, remoteStale: true });
-    expect(mergeSingle(undefined, s(T1, 5))).toEqual({ winner: s(T1, 5), applyLocal: true, remoteStale: false });
+    const s = older(T1, 5);
+    expect(mergeSettings(undefined, undefined)).toEqual({ merged: undefined, applyLocal: false, remoteStale: false });
+    expect(mergeSettings(s, undefined)).toEqual({ merged: s, applyLocal: false, remoteStale: true });
+    expect(mergeSettings(undefined, s)).toEqual({ merged: s, applyLocal: true, remoteStale: false });
   });
 
-  it('picks the newer side', () => {
-    expect(mergeSingle(s(T2, 5), s(T1, 9))).toEqual({ winner: s(T2, 5), applyLocal: false, remoteStale: true });
-    expect(mergeSingle(s(T1, 5), s(T2, 9))).toEqual({ winner: s(T2, 9), applyLocal: true, remoteStale: false });
-    expect(mergeSingle(s(T1, 5), s(T1, 9))).toEqual({ winner: s(T1, 9), applyLocal: false, remoteStale: false });
+  it('keeps the latest change of each setting, so changes to different settings on two devices both survive', () => {
+    // A new device changed only the daily limit; the other device had turned reverse cards on earlier.
+    const phone: Settings = { newCardsPerDay: 10, reverseCards: false, updatedAt: T2, changedAt: { newCardsPerDay: T2 } };
+    const desktop: Settings = { newCardsPerDay: 20, reverseCards: true, updatedAt: T1, changedAt: { reverseCards: T1 } };
+    const r = mergeSettings(phone, desktop);
+    expect(r.merged).toEqual({
+      newCardsPerDay: 10,
+      reverseCards: true,
+      updatedAt: T2,
+      changedAt: { newCardsPerDay: T2, reverseCards: T1 },
+    });
+    expect(r.applyLocal).toBe(true);
+    expect(r.remoteStale).toBe(true);
+    expect(mergeSettings(desktop, phone).merged).toEqual(r.merged);
+  });
+
+  it('counts every setting of a record from before M4 as changed at its updatedAt', () => {
+    const remote: Settings = { newCardsPerDay: 30, reverseCards: false, updatedAt: T3, changedAt: { newCardsPerDay: T3 } };
+    expect(mergeSettings(older(T2, 5, true), remote).merged).toEqual({
+      newCardsPerDay: 30,
+      reverseCards: true,
+      updatedAt: T3,
+      changedAt: { newCardsPerDay: T3, reverseCards: T2 },
+    });
+  });
+
+  it('keeps the remote value on a tie, and reports no work when both sides agree', () => {
+    const local: Settings = { newCardsPerDay: 5, reverseCards: false, updatedAt: T1, changedAt: { newCardsPerDay: T1 } };
+    const remote: Settings = { ...local, newCardsPerDay: 9 };
+    expect(mergeSettings(local, remote)).toEqual({ merged: remote, applyLocal: true, remoteStale: false });
+    expect(mergeSettings({ ...remote, changedAt: { newCardsPerDay: T1 } }, remote)).toEqual({
+      merged: remote,
+      applyLocal: false,
+      remoteStale: false,
+    });
   });
 });

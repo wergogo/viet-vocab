@@ -27,12 +27,29 @@ describe('review settings', () => {
       newCardsPerDay: 5,
       reverseCards: false,
       updatedAt: '2026-11-22T08:00:00.000Z',
+      changedAt: { newCardsPerDay: '2026-11-22T08:00:00.000Z' },
     });
     const before = dirtySeq();
     await saveSettings({ reverseCards: true });
     expect(await getSettings()).toEqual({ newCardsPerDay: 5, reverseCards: true });
-    expect((await db.settings.get('settings'))?.updatedAt).toBe('2026-11-22T08:00:00.001Z');
+    expect(await db.settings.get('settings')).toMatchObject({
+      updatedAt: '2026-11-22T08:00:00.001Z',
+      changedAt: { newCardsPerDay: '2026-11-22T08:00:00.000Z', reverseCards: '2026-11-22T08:00:00.001Z' },
+    });
     expect(dirtySeq()).toBe(before + 1);
+  });
+
+  it('stamps only the settings that changed, counting a record from before M4 as changed at its updatedAt', async () => {
+    const before = '2026-11-01T00:00:00.000Z';
+    await db.settings.put({ id: 'settings', newCardsPerDay: 5, reverseCards: false, updatedAt: before });
+    await saveSettings({ newCardsPerDay: 5, reverseCards: true });
+    expect(await db.settings.get('settings')).toEqual({
+      id: 'settings',
+      newCardsPerDay: 5,
+      reverseCards: true,
+      updatedAt: '2026-11-22T08:00:00.000Z',
+      changedAt: { newCardsPerDay: before, reverseCards: '2026-11-22T08:00:00.000Z' },
+    });
   });
 
   it('writes nothing when the value is unchanged, the defaults included before the first save', async () => {

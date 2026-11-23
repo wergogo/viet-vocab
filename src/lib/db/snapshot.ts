@@ -1,5 +1,5 @@
 import { parseFile, serializeFile, type VocabData } from '../model/file';
-import { mergeRecords, mergeSingle } from '../model/merge';
+import { mergeRecords, mergeSettings } from '../model/merge';
 import { nowIso } from '../model/ids';
 import { db } from './db';
 import { fromRow, toRow } from './derive';
@@ -44,20 +44,31 @@ export async function mergeIntoLocal(remote: VocabData): Promise<MergeOutcome> {
     const words = mergeRecords(local.words, remote.words);
     const lists = mergeRecords(local.lists, remote.lists);
     const cards = mergeRecords(local.cards, remote.cards);
-    const settings = mergeSingle(local.settings, remote.settings);
+    const settings = mergeSettings(local.settings, remote.settings);
 
     await db.words.bulkPut(words.toApply.map((w) => toRow(w)));
     await db.lists.bulkPut(lists.toApply);
     await db.cards.bulkPut(cards.toApply);
-    if (settings.applyLocal && settings.winner) await db.settings.put({ ...settings.winner, id: 'settings' });
+    if (settings.applyLocal && settings.merged) await db.settings.put({ ...settings.merged, id: 'settings' });
 
     const merged: VocabData = { words: words.merged, lists: lists.merged, cards: cards.merged };
-    if (settings.winner) merged.settings = settings.winner;
+    if (settings.merged) merged.settings = settings.merged;
     return {
       applied: words.toApply.length + lists.toApply.length + cards.toApply.length + (settings.applyLocal ? 1 : 0),
       remoteStale: words.remoteStale || lists.remoteStale || cards.remoteStale || settings.remoteStale,
       merged,
     };
+  });
+}
+
+/**
+ * How many word, list and card records are stored, tombstones included. Records are never purged (spec §4.2), so the
+ * count only drops when the browser's data was cleared (M4 decision 2).
+ */
+export async function countLocalRecords(): Promise<number> {
+  return db.transaction('r', [db.words, db.lists, db.cards], async () => {
+    const counts = await Promise.all([db.words.count(), db.lists.count(), db.cards.count()]);
+    return counts[0] + counts[1] + counts[2];
   });
 }
 

@@ -1,8 +1,13 @@
 import { cardId } from './ids';
 import { isNewCardsPerDay } from './settings';
-import { tombstone, type List, type Rec, type ReviewCard, type Settings, type Word } from './types';
+import { SETTING_NAMES, tombstone, type List, type Rec, type ReviewCard, type Settings, type Word } from './types';
 
 export const APP_ID = 'viet-vocab';
+
+/**
+ * The file format's version. A new synced field or collection always comes with a bump (M4 decision 14): a device
+ * still on an older version then stops and asks to be updated, instead of rewriting records without the new field.
+ */
 export const SCHEMA_VERSION = 1;
 
 export interface VocabData {
@@ -69,6 +74,16 @@ const isSyllable = (s: unknown): boolean =>
 const isSense = (s: unknown): boolean => isObject(s) && isString(s.pos) && isString(s.meaning);
 const isSource = (s: unknown): boolean => isObject(s) && isString(s.wiktionaryTitle) && isCanonicalIso(s.fetchedAt);
 
+/**
+ * The `source` of a word filled from Wiktionary. Every record the app writes must pass parseFile, or the sync file would
+ * stop loading on every device, so a fetch time that isn't canonical is rewritten as one, or replaced by `now`.
+ */
+export function wordSource(wiktionaryTitle: string, fetchedAt: string, now = new Date()): NonNullable<Word['source']> {
+  const time = new Date(fetchedAt);
+  const iso = Number.isNaN(time.getTime()) ? '' : time.toISOString();
+  return { wiktionaryTitle, fetchedAt: isCanonicalIso(iso) ? iso : now.toISOString() };
+}
+
 const OPTIONAL_WORD_TEXT = ['ipaHanoi', 'ipaSaigon', 'etymology', 'notes', 'audioFile'] as const;
 
 function wordProblem(r: Fields): string | null {
@@ -88,6 +103,10 @@ function wordProblem(r: Fields): string | null {
   if (r.source !== undefined && !isSource(r.source)) return 'has an invalid source';
   return null;
 }
+
+/** Absent, or the time each setting was last changed (M4 decision 8). */
+const isSettingTimes = (v: unknown): boolean =>
+  v === undefined || (isObject(v) && SETTING_NAMES.every((name) => v[name] === undefined || isCanonicalIso(v[name])));
 
 const isCount = (v: unknown): boolean => typeof v === 'number' && Number.isInteger(v) && v >= 0;
 const isAmount = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v) && v >= 0;
@@ -203,7 +222,12 @@ export function parseFile(text: string): VocabFile {
   }
   if (file.settings !== undefined) {
     const s = file.settings as Partial<Settings> | null;
-    if (!isNewCardsPerDay(s?.newCardsPerDay) || typeof s?.reverseCards !== 'boolean' || !isCanonicalIso(s.updatedAt)) {
+    if (
+      !isNewCardsPerDay(s?.newCardsPerDay) ||
+      typeof s?.reverseCards !== 'boolean' ||
+      !isCanonicalIso(s.updatedAt) ||
+      !isSettingTimes(s.changedAt)
+    ) {
       throw new FileFormatError('The settings record is invalid.');
     }
   }

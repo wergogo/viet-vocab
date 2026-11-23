@@ -1,6 +1,7 @@
 import { nextTimestamp } from '../model/ids';
+import { settingTimes } from '../model/merge';
 import { isNewCardsPerDay, MAX_NEW_CARDS_PER_DAY } from '../model/settings';
-import { DEFAULT_SETTINGS, type ReviewSettings } from '../model/types';
+import { DEFAULT_SETTINGS, SETTING_NAMES, type ReviewSettings, type SettingTimes } from '../model/types';
 import { db } from './db';
 import { markDirty } from './dirty';
 
@@ -12,7 +13,9 @@ export async function getSettings(): Promise<ReviewSettings> {
 
 /**
  * Saves a change to the review settings with a new updatedAt (spec §4.2) and marks sync dirty; an unchanged value
- * writes nothing. `newCardsPerDay` must stay in the range parseFile accepts, or exports would stop importing.
+ * writes nothing. Only the settings that changed get the new time in `changedAt`, so a merge keeps another device's
+ * change to the others (M4 decision 8). `newCardsPerDay` must stay in the range parseFile accepts, or exports would
+ * stop importing.
  */
 export async function saveSettings(change: Partial<ReviewSettings>): Promise<ReviewSettings> {
   if (change.newCardsPerDay !== undefined && !isNewCardsPerDay(change.newCardsPerDay)) {
@@ -34,8 +37,12 @@ export async function saveSettings(change: Partial<ReviewSettings>): Promise<Rev
     };
     // Before the first save the defaults count as stored, so saving them creates no record that sync would treat as
     // a newer choice than another device's.
-    if (next.newCardsPerDay === current.newCardsPerDay && next.reverseCards === current.reverseCards) return current;
-    await db.settings.put({ id: 'settings', ...next, updatedAt: nextTimestamp(row?.updatedAt) });
+    const names = SETTING_NAMES.filter((name) => next[name] !== current[name]);
+    if (names.length === 0) return current;
+    const updatedAt = nextTimestamp(row?.updatedAt);
+    const changedAt: SettingTimes = row ? { ...settingTimes(row) } : {};
+    for (const name of names) changedAt[name] = updatedAt;
+    await db.settings.put({ id: 'settings', ...next, updatedAt, changedAt });
     changed = true;
     return next;
   });

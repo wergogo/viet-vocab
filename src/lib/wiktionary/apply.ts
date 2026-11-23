@@ -1,4 +1,5 @@
 import type { WordDraft } from '../db/words';
+import { wordSource } from '../model/file';
 import { rebuildSyllables } from '../text/syllables';
 import { wordKey } from '../text/tone';
 import { pairCharacters } from './characters';
@@ -34,7 +35,7 @@ export function applyEntry(draft: WordDraft, result: LookupResult, entry: Lookup
       ipaSaigon: entry.ipaSaigon || base.ipaSaigon,
       etymology: entry.etymology || base.etymology,
       audioFile: entry.audioFile ?? base.audioFile,
-      source: result.title ? { wiktionaryTitle: result.title, fetchedAt: result.fetchedAt } : base.source,
+      source: result.title ? wordSource(result.title, result.fetchedAt) : base.source,
     },
     note: pairing.note,
   };

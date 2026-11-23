@@ -8,7 +8,7 @@ import { isDirty } from './dirty';
 import { createList } from './lists';
 import { findDuplicates, searchWords } from './search';
 import { expectDerivedFieldsFresh } from './test-utils';
-import { exportJson, importJson, mergeIntoLocal, readLocalData } from './snapshot';
+import { countLocalRecords, exportJson, importJson, mergeIntoLocal, readLocalData } from './snapshot';
 import { createWord, deleteWord, emptyDraft, getWord, listLiveWords } from './words';
 
 const T1 = '2026-01-01T00:00:00.000Z';
@@ -112,6 +112,32 @@ describe('merge semantics', () => {
     expect(again).toMatchObject({ applied: 0, remoteStale: false });
   });
 
+  it('takes the remote copy of a record stamped at the same time with different content (M4 decision 7)', async () => {
+    await mergeIntoLocal({ words: [remoteWord], lists: [], cards: [] });
+    const edited: Word = { ...remoteWord, notes: 'hand-edited in the repository' };
+    const outcome = await mergeIntoLocal({ words: [edited], lists: [], cards: [] });
+    expect(outcome).toMatchObject({ applied: 1, remoteStale: false });
+    expect(await getWord('w9')).toEqual(edited);
+  });
+
+  it('merges the settings record setting by setting (M4 decision 8)', async () => {
+    await db.settings.put({ id: 'settings', newCardsPerDay: 5, reverseCards: false, updatedAt: T2, changedAt: { newCardsPerDay: T2 } });
+    const outcome = await mergeIntoLocal({
+      words: [],
+      lists: [],
+      cards: [],
+      settings: { newCardsPerDay: 20, reverseCards: true, updatedAt: T1, changedAt: { reverseCards: T1 } },
+    });
+    expect(outcome).toMatchObject({ applied: 1, remoteStale: true });
+    expect(await db.settings.get('settings')).toEqual({
+      id: 'settings',
+      newCardsPerDay: 5,
+      reverseCards: true,
+      updatedAt: T2,
+      changedAt: { newCardsPerDay: T2, reverseCards: T1 },
+    });
+  });
+
   it('writes nothing when the merge fails part-way', async () => {
     const spy = vi.spyOn(db.cards, 'bulkPut').mockRejectedValueOnce(new Error('disk full'));
     const text = serializeFile({ words: [remoteWord], lists: [], cards: [card] }, T1);
@@ -119,6 +145,18 @@ describe('merge semantics', () => {
     spy.mockRestore();
     expect(await db.words.count()).toBe(0);
     expect(isDirty()).toBe(false);
+  });
+});
+
+describe('countLocalRecords', () => {
+  it('counts words, lists and cards, tombstones included', async () => {
+    expect(await countLocalRecords()).toBe(0);
+    const word = await createWord({ ...emptyDraft('nhập khẩu'), senses: [] });
+    await createList('Economy');
+    await db.cards.put({ id: `${word.id}:f`, wordId: word.id, direction: 'forward', fsrs: fsrsState(T1), introducedAt: T1, updatedAt: T1 });
+    await deleteWord(word.id);
+    await db.settings.put({ id: 'settings', newCardsPerDay: 5, reverseCards: false, updatedAt: T1 });
+    expect(await countLocalRecords()).toBe(3);
   });
 });
 
