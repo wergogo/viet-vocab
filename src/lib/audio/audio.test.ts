@@ -1,6 +1,6 @@
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
-import { canPlayRecording, commonsAudioUrl, isVietnameseVoice, pickVoice, saveVoiceUri, savedVoiceUri } from './audio';
+import { canPlayRecording, commonsAudioUrl, isVietnameseVoice, pickVoice } from './audio';
 
 const voice = (voiceURI: string, lang: string) => ({ voiceURI, lang });
 // The module reads only lang and voiceURI and hands the voice to the (stubbed) utterance.
@@ -178,13 +178,6 @@ describe('voices', () => {
     expect(pickVoice([voice('en', 'en-US')], null)).toBeNull();
   });
 
-  it('remembers the chosen voice on this device', () => {
-    expect(savedVoiceUri()).toBeNull();
-    saveVoiceUri('vi-2');
-    expect(savedVoiceUri()).toBe('vi-2');
-    saveVoiceUri(null);
-    expect(savedVoiceUri()).toBeNull();
-  });
 });
 
 describe('vietnameseVoices', () => {
@@ -258,14 +251,13 @@ describe('device settings', () => {
     expect(seen).toEqual([undefined, 'vi-2']);
   });
 
-  it('follows a voice chosen in another tab', async () => {
-    stubSound();
+  it('remembers the chosen voice on this device, and forgets it when set to none', async () => {
     const { chosenVoiceUri } = await freshAudio();
-    const seen: (string | null)[] = [];
-    onTestFinished(chosenVoiceUri.subscribe((uri) => seen.push(uri)));
-    localStorage.setItem('vv.audio.voice', 'vi-9');
-    window.dispatchEvent(new StorageEvent('storage', { key: 'vv.audio.voice' }));
-    expect(seen).toEqual([null, 'vi-9']);
+    expect(chosenVoiceUri.get()).toBeNull();
+    chosenVoiceUri.set('vi-2');
+    expect(localStorage.getItem('vv.audio.voice')).toBe('vi-2');
+    chosenVoiceUri.set(null);
+    expect(localStorage.getItem('vv.audio.voice')).toBeNull();
   });
 
   it('plays words during review unless autoplay is turned off on this device', async () => {
@@ -277,25 +269,5 @@ describe('device settings', () => {
     autoplay.set(true);
     expect(localStorage.getItem('vv.review.autoplay')).toBeNull();
     expect(seen).toEqual([true, false, true]);
-  });
-
-  it('reads the setting again when another tab clears storage, and ignores other keys', async () => {
-    localStorage.setItem('vv.review.autoplay', 'off');
-    const { autoplay } = await freshAudio();
-    const seen: boolean[] = [];
-    onTestFinished(autoplay.subscribe((on) => seen.push(on)));
-    localStorage.removeItem('vv.review.autoplay');
-    window.dispatchEvent(new StorageEvent('storage', { key: 'vv.other' }));
-    expect(seen).toEqual([false]);
-    localStorage.clear();
-    window.dispatchEvent(new StorageEvent('storage', { key: null }));
-    expect(seen).toEqual([false, true]);
-  });
-
-  it('reads storage again when next used, after a change made while nothing listened', async () => {
-    const { autoplay } = await freshAudio();
-    expect(get(autoplay)).toBe(true);
-    localStorage.setItem('vv.review.autoplay', 'off');
-    expect(get(autoplay)).toBe(false);
   });
 });

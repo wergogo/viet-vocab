@@ -1,4 +1,5 @@
-import { derived, readable, writable, type Readable } from 'svelte/store';
+import { derived, readable, type Readable } from 'svelte/store';
+import { deviceSetting } from '../db/deviceSetting';
 
 /** Commons serves a file's bytes at Special:FilePath (spec §9). */
 export function commonsAudioUrl(file: string): string {
@@ -55,26 +56,6 @@ export async function playRecording(file: string): Promise<void> {
   }
 }
 
-const VOICE_KEY = 'vv.audio.voice';
-
-/** The voice chosen in Settings on this device, or null (spec §4.3: chosen voice lives in localStorage). */
-export function savedVoiceUri(): string | null {
-  try {
-    return localStorage.getItem(VOICE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-export function saveVoiceUri(uri: string | null): void {
-  try {
-    if (uri) localStorage.setItem(VOICE_KEY, uri);
-    else localStorage.removeItem(VOICE_KEY);
-  } catch {
-    // A per-device convenience: without storage the first Vietnamese voice is used.
-  }
-}
-
 export function isVietnameseVoice(voice: { lang: string }): boolean {
   return voice.lang.toLowerCase().startsWith('vi');
 }
@@ -122,32 +103,11 @@ export const vietnameseVoices: Readable<SpeechSynthesisVoice[]> = readable<Speec
 // has them ready by the first word review plays, which reads the voice only inside that tap.
 if (typeof speechSynthesis !== 'undefined') speechSynthesis.getVoices();
 
-/** A per-device setting (spec §4.3: localStorage) as a store; `set` saves it. */
-export interface DeviceSetting<T> extends Readable<T> {
-  set(value: T): void;
-}
-
-/** Wraps a localStorage value in a store that also follows changes made in other tabs. */
-function deviceSetting<T>(key: string, read: () => T, write: (value: T) => void): DeviceSetting<T> {
-  const store = writable<T>(read(), (set) => {
-    set(read());
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === key || e.key === null) set(read());
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  });
-  return {
-    subscribe: store.subscribe,
-    set(value: T) {
-      write(value);
-      store.set(value);
-    },
-  };
-}
-
-/** The voice URI chosen in Settings on this device (null until one is chosen). */
-export const chosenVoiceUri = deviceSetting(VOICE_KEY, savedVoiceUri, saveVoiceUri);
+/**
+ * The voice URI chosen in Settings on this device (spec §4.3: localStorage), or null until one is chosen. Without
+ * storage the choice lasts for this session, and the first Vietnamese voice is used after that.
+ */
+export const chosenVoiceUri = deviceSetting<string | null>('vv.audio.voice', (text) => text, (uri) => uri || null);
 
 /** The voice words are read with: the chosen one while installed, else the first Vietnamese voice (spec §9). */
 export const chosenVoice: Readable<SpeechSynthesisVoice | null> = derived(
@@ -155,27 +115,8 @@ export const chosenVoice: Readable<SpeechSynthesisVoice | null> = derived(
   ([voices, uri]) => pickVoice(voices, uri),
 );
 
-const AUTOPLAY_KEY = 'vv.review.autoplay';
-
-export function savedAutoplay(): boolean {
-  try {
-    return localStorage.getItem(AUTOPLAY_KEY) !== 'off';
-  } catch {
-    return true;
-  }
-}
-
-export function saveAutoplay(on: boolean): void {
-  try {
-    if (on) localStorage.removeItem(AUTOPLAY_KEY);
-    else localStorage.setItem(AUTOPLAY_KEY, 'off');
-  } catch {
-    // A per-device convenience: without storage, autoplay stays on.
-  }
-}
-
 /** Whether review plays each word when it appears (spec §5.6, per device). On unless turned off. */
-export const autoplay = deviceSetting(AUTOPLAY_KEY, savedAutoplay, saveAutoplay);
+export const autoplay = deviceSetting<boolean>('vv.review.autoplay', (text) => text !== 'off', (on) => (on ? null : 'off'));
 
 /** Speaks the text with the voice, stopping any recording or speech still playing. */
 export function speak(text: string, voice: SpeechSynthesisVoice): void {
