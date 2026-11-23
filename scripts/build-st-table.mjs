@@ -1,8 +1,10 @@
 // Builds src/lib/text/st-table.json from OpenCC's character tables (Apache-2.0).
 // Usage: npm run build:st-table
+// The tables come from a fixed OpenCC commit, so a rebuild gives the same table; change COMMIT on purpose.
 import { writeFile } from 'node:fs/promises';
 
-const BASE = 'https://raw.githubusercontent.com/BYVoid/OpenCC/master/data/dictionary/';
+const COMMIT = 'fae2a0a911c30764e669a7d8b0591cd8e852934a'; // 2026-10-29
+const BASE = `https://raw.githubusercontent.com/BYVoid/OpenCC/${COMMIT}/data/dictionary/`;
 
 async function load(name) {
   const res = await fetch(BASE + name);
@@ -29,7 +31,7 @@ if (Object.keys(s2t).length < 3000 || s2t['国'] !== '國' || t2s['學'] !== '�
   throw new Error('Unexpected OpenCC data; st-table.json was not written');
 }
 const out = {
-  _source: 'OpenCC data/dictionary STCharacters.txt + TSCharacters.txt (Apache-2.0), https://github.com/BYVoid/OpenCC',
+  _source: `OpenCC data/dictionary STCharacters.txt + TSCharacters.txt at commit ${COMMIT} (Apache-2.0), https://github.com/BYVoid/OpenCC`,
   s2t,
   t2s,
 };
