@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import { autoplay, chosenVoice, pronounce } from '../../audio/audio';
   import { saveReview } from '../../db/cards';
-  import { RecordNotFoundError } from '../../db/errors';
-  import { cardId } from '../../model/ids';
   import type { ReviewCard } from '../../model/types';
   import { formatDueIn } from '../../review/format';
-  import { rate, ratingOptions, RATINGS, type Grade, type RatingOption } from '../../review/fsrs';
-  import { buildQueue, LEARN_AHEAD_MS, type QueueItem } from '../../review/queue';
+  import { RATINGS, type Grade } from '../../review/fsrs';
+  import { buildQueue, LEARN_AHEAD_MS, type Queue, type QueueItem } from '../../review/queue';
+  import { ReviewSession } from '../../review/session.svelte';
+  import { holdSync } from '../../sync/sync';
   import { href } from '../router';
   import { liveCards, liveLists, liveSettings, liveWords } from '../stores';
   import AudioButton from '../components/AudioButton.svelte';
@@ -21,26 +21,38 @@
   // A list deleted meanwhile falls back to all words, like the Words screen's filter.
   const scopeId = $derived(($liveLists ?? []).some((l) => l.id === scope) ? scope : '');
 
-  let phase = $state<'start' | 'card' | 'done'>('start');
-  /** The cards as this session knows them: the stored ones plus every rating, as soon as it is made. */
-  let sessionCards = $state.raw<ReviewCard[] | null>(null);
-  let current = $state.raw<QueueItem | null>(null);
-  let revealed = $state(false);
-  let options = $state.raw<RatingOption[]>([]);
-  let revealedAt = $state.raw(new Date());
-  let reviewed = $state(0);
-  let saveError = $state('');
   let now = $state(new Date());
   let answerButton: HTMLButtonElement | undefined = $state();
   let answer: HTMLElement | undefined = $state();
 
+  const session: ReviewSession = new ReviewSession({
+    // The queue below is built over the session's cards, so its first item is the next card.
+    next: (): QueueItem | null => {
+      now = new Date();
+      return queue?.items[0] ?? null;
+    },
+    save: saveReview,
+    // Called from a tap or key press, so phones allow the sound (spec §5.6 autoplay; Android needs a user gesture).
+    pronounce: (item) => void pronounce(item.word.word, item.word.audioFile, $chosenVoice),
+    autoplay: () => $autoplay,
+    now: () => new Date(),
+    holdSync,
+  });
+  onDestroy(() => session.stop());
+
   // While reviewing, the session's own copy, so a rating's background save doesn't build the queue again.
-  const cards = $derived(sessionCards ?? $liveCards);
-  const queue = $derived(
+  const cards: ReviewCard[] | undefined = $derived(session.cards ?? $liveCards);
+  const queue: Queue | null = $derived(
     $liveWords && $liveLists && cards && $liveSettings
       ? buildQueue({ words: $liveWords, cards, settings: $liveSettings, now, listId: scopeId || undefined })
       : null,
   );
+
+  // Cards stored meanwhile, by a sync or another tab, join the session's copy (M4 decision 12).
+  $effect(() => {
+    const stored = $liveCards;
+    if (stored) untrack(() => session.mergeStored(stored));
+  });
 
   // Cards come due as time passes; keep the counts on the start and end screens current.
   $effect(() => {
@@ -48,81 +60,35 @@
     return () => clearInterval(timer);
   });
 
-  /** The next card at this moment, or null when the session is over. */
-  function nextItem(): QueueItem | null {
-    now = new Date();
-    return queue?.items[0] ?? null;
-  }
-
-  // Called from a tap or key press, so phones allow the sound (spec §5.6 autoplay; Android needs a user gesture).
-  function say(item: QueueItem) {
-    void pronounce(item.word.word, item.word.audioFile, $chosenVoice);
-  }
-
-  function show(item: QueueItem | null) {
-    current = item;
-    revealed = false;
-    options = [];
-    if (!item) {
-      phase = 'done';
-      return;
-    }
-    phase = 'card';
-    if ($autoplay && item.direction === 'forward') say(item);
-    void tick().then(() => answerButton?.focus({ preventScroll: true }));
+  function focusSoon(target: () => HTMLElement | undefined) {
+    void tick().then(() => target()?.focus({ preventScroll: true }));
   }
 
   function start() {
     if (!$liveCards) return;
-    sessionCards = [...$liveCards];
-    reviewed = 0;
-    saveError = '';
-    show(nextItem());
+    session.start($liveCards);
+    if (session.phase === 'card') focusSoon(() => answerButton);
   }
 
   function reveal() {
-    if (phase !== 'card' || !current || revealed) return;
-    revealed = true;
-    revealedAt = new Date();
-    options = ratingOptions(current.card?.fsrs, revealedAt);
-    if ($autoplay && current.direction === 'reverse') say(current);
-    void tick().then(() => answer?.focus({ preventScroll: true }));
+    if (session.revealed) return;
+    session.reveal();
+    if (session.revealed) focusSoon(() => answer);
   }
 
   function rateCurrent(grade: Grade) {
-    const item = current;
-    if (!item || !revealed) return;
-    const at = new Date();
-    const fsrs = rate(item.card?.fsrs, grade, at);
-    const id = cardId(item.word.id, item.direction);
-    // The session moves on at once; the save finishes in the background (spec §8: one write per rating).
-    const local: ReviewCard = {
-      id,
-      wordId: item.word.id,
-      direction: item.direction,
-      fsrs,
-      introducedAt: item.card?.introducedAt ?? at.toISOString(),
-      updatedAt: at.toISOString(),
-    };
-    sessionCards = [...(sessionCards ?? []).filter((c) => c.id !== id), local];
-    reviewed++;
-    saveReview(item.word.id, item.direction, fsrs, at).catch((e: unknown) => {
-      // A word deleted meanwhile (another tab, a sync) simply leaves the queue.
-      if (e instanceof RecordNotFoundError) return;
-      console.error(e);
-      saveError = `Couldn't save the review of “${item.word.word}”. Your other reviews are saved.`;
-    });
-    show(nextItem());
+    session.rate(grade);
+    if (session.phase === 'card') focusSoon(() => answerButton);
   }
 
   // Desktop keys (spec §5.5): Space shows the answer, 1–4 rate it.
   function onKey(e: KeyboardEvent) {
-    if (phase !== 'card' || e.altKey || e.ctrlKey || e.metaKey || e.repeat) return;
+    if (session.phase !== 'card' || e.altKey || e.ctrlKey || e.metaKey || e.repeat) return;
     if ((e.target as HTMLElement | null)?.closest('input, select, textarea, [contenteditable="true"]')) return;
-    if (!revealed && e.key === ' ') {
+    if (!session.revealed && e.key === ' ') {
       e.preventDefault();
       reveal();
-    } else if (revealed && /^[1-4]$/.test(e.key)) {
+    } else if (session.revealed && /^[1-4]$/.test(e.key)) {
       e.preventDefault();
       rateCurrent(RATINGS[Number(e.key) - 1]!.grade);
     }
@@ -132,11 +98,11 @@
 <svelte:window onkeydown={onKey} />
 
 <div class="stack">
-  <h1 class:sr-only={phase === 'card'}>Review</h1>
+  <h1 class:sr-only={session.phase === 'card'}>Review</h1>
 
   {#if !queue}
     <p class="muted">Loading…</p>
-  {:else if phase === 'start'}
+  {:else if session.phase === 'start'}
     <div class="card stack">
       <label class="field">
         <span>Words to review</span>
@@ -173,38 +139,38 @@
         </div>
       {/if}
     </div>
-  {:else if phase === 'card' && current}
+  {:else if session.phase === 'card' && session.current}
     <p class="muted progress" role="status">
-      {reviewed} reviewed · {queue.items.length} left
+      {session.reviewed} reviewed · {queue.items.length} left
     </p>
 
     <section class="card stack front" aria-label="Question">
-      {#if current.direction === 'forward'}
+      {#if session.current.direction === 'forward'}
         <div class="row prompt-row">
-          <p class="prompt" lang="vi">{current.word.word}</p>
-          <AudioButton text={current.word.word} audioFile={current.word.audioFile} />
+          <p class="prompt" lang="vi">{session.current.word.word}</p>
+          <AudioButton text={session.current.word.word} audioFile={session.current.word.audioFile} />
         </div>
         <p class="muted hint">What does it mean?</p>
       {:else}
         <dl class="meanings">
-          {#each current.word.senses.filter((s) => s.meaning) as s, i (i)}<dt>{s.pos || 'Meaning'}</dt><dd>{s.meaning}</dd>{/each}
+          {#each session.current.word.senses.filter((s) => s.meaning) as s, i (i)}<dt>{s.pos || 'Meaning'}</dt><dd>{s.meaning}</dd>{/each}
         </dl>
         <p class="muted hint">Which word is it?</p>
       {/if}
     </section>
 
-    {#if !revealed}
+    {#if !session.revealed}
       <button type="button" class="primary show" bind:this={answerButton} onclick={reveal}>
         Show answer <kbd class="key" aria-hidden="true">Space</kbd>
       </button>
     {:else}
       <div class="ratings" role="group" aria-label="How well did you remember it?">
-        {#each options as option, i (option.grade)}
+        {#each session.options as option, i (option.grade)}
           <button
             type="button"
             class="rating"
             class:again={i === 0}
-            aria-label="{option.label}, due {formatDueIn(option.due, revealedAt)}"
+            aria-label="{option.label}, due {formatDueIn(option.due, session.revealedAt)}"
             onclick={() => rateCurrent(option.grade)}
           >
             <span class="label">{option.label}</span>
@@ -214,14 +180,16 @@
         {/each}
       </div>
       <section class="card stack back" tabindex="-1" bind:this={answer} aria-label="Answer">
-        <WordCard word={current.word} level={2} />
+        <WordCard word={session.current.word} level={2} />
       </section>
     {/if}
-    {#if saveError}<p class="notice" role="alert">{saveError}</p>{/if}
+    {#if session.saveError}<p class="notice" role="alert">{session.saveError}</p>{/if}
   {:else}
     <div class="card stack">
       <p>
-        {reviewed === 0 ? 'No cards were reviewed.' : `You reviewed ${reviewed} ${reviewed === 1 ? 'card' : 'cards'}.`}
+        {session.reviewed === 0
+          ? 'No cards were reviewed.'
+          : `You reviewed ${session.reviewed} ${session.reviewed === 1 ? 'card' : 'cards'}.`}
         {#if queue.nextDue}The next card is due {formatDueIn(queue.nextDue, now)}.{/if}
       </p>
       {#if queue.newLater > 0}
@@ -230,7 +198,7 @@
           <a href={href({ name: 'settings' })}>New cards per day</a> in Settings.
         </p>
       {/if}
-      {#if saveError}<p class="notice" role="alert">{saveError}</p>{/if}
+      {#if session.saveError}<p class="notice" role="alert">{session.saveError}</p>{/if}
       <div class="row">
         <a class="button" href={href({ name: 'words' })}>Back to words</a>
         {#if queue.items.length > 0}

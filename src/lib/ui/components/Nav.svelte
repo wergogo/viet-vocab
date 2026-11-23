@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { stopsAutoSync } from '../../sync/errors';
+  import { syncStatus } from '../../sync/sync';
   import { href, type Route } from '../router';
 
   let { current }: { current: Route['name'] } = $props();
@@ -24,6 +26,9 @@
     {#each tabs as tab (tab.name)}
       <a class="tab" class:active={isActive(tab.name)} aria-current={isActive(tab.name) ? 'page' : undefined} href={href({ name: tab.name })}>
         <span aria-hidden="true">{tab.icon}</span><span>{tab.label}</span>
+        {#if tab.name === 'settings' && $syncStatus.state === 'error' && stopsAutoSync($syncStatus.kind)}
+          <span class="dot" aria-hidden="true"></span><span class="sr-only">(sync problem)</span>
+        {/if}
       </a>
     {/each}
     <a class="tab add" class:active={current === 'add'} aria-current={current === 'add' ? 'page' : undefined} href={href({ name: 'add', word: '' })}>
@@ -31,3 +36,9 @@
     </a>
   </div>
 </nav>
+
+<style>
+  .tab { position: relative; }
+  /* M4 decision 18: a sync that stopped until the owner acts shows on the Settings tab, so it isn't missed. */
+  .dot { position: absolute; top: 4px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+</style>

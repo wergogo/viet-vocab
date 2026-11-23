@@ -45,8 +45,8 @@
 <section class="card stack">
   <h2>Data</h2>
   <p class="muted">
-    Export a backup of all words, lists and review progress, or import a file exported from this app. An import merges
-    by most recent edit and never deletes anything.
+    Export a backup of all words, lists and review progress, or import one. An import merges by most recent edit. A
+    backup from Export never deletes anything; a sync file (vocab.json) also brings the deletions it records.
   </p>
   <div class="row">
     <button type="button" onclick={doExport}>Export JSON</button>

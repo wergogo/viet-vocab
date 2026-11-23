@@ -3,12 +3,14 @@
   import DataSection from '../settings/DataSection.svelte';
   import ListsSection from '../settings/ListsSection.svelte';
   import ReviewSection from '../settings/ReviewSection.svelte';
+  import SyncSection from '../settings/SyncSection.svelte';
 </script>
 
-<!-- Spec §5.6 order; Sync joins at the top in M4. -->
+<!-- Spec §5.6 order. -->
 <div class="stack">
   <h1>Settings</h1>
 
+  <SyncSection />
   <ReviewSection />
   <AudioSection />
   <ListsSection />
