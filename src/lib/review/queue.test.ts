@@ -79,7 +79,7 @@ describe('buildQueue', () => {
   it('starts reverse cards the day after the forward card, only for words with a meaning', () => {
     const words = [word('a', 1), word('b', 2), word('c', 3, { senses: [{ pos: 'Noun', meaning: '' }] }), word('d', 4)];
     const cards = [card('a', at(20), YESTERDAY), card('b', at(20), at(8)), card('c', at(20), YESTERDAY)];
-    // b's forward card was introduced today, so a reverse card goes next (decision 15).
+    // b's forward card was introduced today, so a reverse card goes next (M3 decision 15).
     expect(ids({ words, cards, settings: reverseOn })).toEqual(['a:r', 'd:f']);
     expect(ids({ words, cards })).toEqual(['d:f']);
   });

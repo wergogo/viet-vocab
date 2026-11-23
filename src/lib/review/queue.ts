@@ -53,7 +53,7 @@ function byDue(a: Scheduled, b: Scheduled): number {
   return a.due < b.due ? -1 : a.due > b.due ? 1 : byAdded(a.item, b.item);
 }
 
-/** A reverse card shows the meanings, so its word needs at least one with text (decision 5). */
+/** A reverse card shows the meanings, so its word needs at least one with text (M3 decision 5). */
 function hasMeaning(word: Word): boolean {
   return word.senses.some((s) => s.meaning !== '');
 }
@@ -87,7 +87,7 @@ export function buildQueue({ words, cards, settings, now, listId }: QueueInput):
   const reverseOf = new Map<string, ReviewCard>();
   for (const card of cards) (card.direction === 'forward' ? forwardOf : reverseOf).set(card.wordId, card);
 
-  // The allowance counts every card introduced today, whatever list its word is in (decision 4).
+  // The allowance counts every card introduced today, whatever list its word is in (M3 decision 4).
   let forwardToday = 0;
   let reverseToday = 0;
   for (const word of words) {
@@ -115,7 +115,7 @@ export function buildQueue({ words, cards, settings, now, listId }: QueueInput):
   const later = scheduled.filter((s) => s.due > nowIso);
   const soon = later.filter((s) => s.due <= soonIso).sort(byDue);
   const nextDue = later.reduce<string | null>((min, s) => (min === null || s.due < min ? s.due : min), null);
-  // New words and reverse cards take turns (decision 15). The queue is rebuilt after every rating, so the turn comes
+  // New words and reverse cards take turns (M3 decision 15). The queue is rebuilt after every rating, so the turn comes
   // from today's introductions: reverse cards go first while fewer of them than new words were introduced today.
   newForward.sort(byAdded);
   newReverse.sort(byAdded);

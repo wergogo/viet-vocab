@@ -64,7 +64,7 @@ function isRefused(e: unknown): boolean {
 
 /**
  * Runs ts-fsrs on the card at `now`; a word's first review starts from an empty card (spec §4.2). No card can get
- * stuck (decision 16): a review dated before the card's last one (a clock set back, or another device's clock running
+ * stuck (M3 decision 16): a review dated before the card's last one (a clock set back, or another device's clock running
  * ahead) counts as made at that last review, and a stored state ts-fsrs refuses (a damaged import) starts over.
  */
 function schedule<T>(card: SerializedFsrsCard | undefined, now: Date, run: (card: Card, at: Date) => T): T {
