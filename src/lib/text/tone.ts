@@ -1,4 +1,4 @@
-import { nfc } from './normalize';
+import { cleanText, exactKey, nfc } from './normalize';
 
 /** Combining tone marks: grave, acute, tilde, hook above, dot below. */
 const TONE = new RegExp(`[${String.fromCodePoint(0x0300, 0x0301, 0x0303, 0x0309, 0x0323)}]`);
@@ -52,4 +52,12 @@ export function toneVariant(word: string): string | null {
 /** Placement-independent form (tone on the second vowel of oa/oe/uy), for comparisons. */
 export function canonicalTone(word: string): string {
   return mapSyllables(word, (variants, original) => (variants.length === 2 ? variants[1] : original));
+}
+
+/**
+ * The key two spellings of one word share: cleaned, tone marks placed one way, lowercase (spec §5.2 duplicates).
+ * The add form's duplicate notice, the character page's ✓ marks and a lookup's "same word" rule all compare with it.
+ */
+export function wordKey(text: string): string {
+  return exactKey(canonicalTone(cleanText(text)));
 }

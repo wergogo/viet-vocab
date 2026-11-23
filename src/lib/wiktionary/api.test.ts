@@ -48,6 +48,14 @@ describe('apiGet', () => {
       json: () => Promise.reject(new DOMException('The operation timed out.', 'TimeoutError')),
     } as unknown as Response;
     await expect(apiGet({}, async () => slowBody)).rejects.toMatchObject({ kind: 'network' });
+    const dropped = { ok: true, status: 200, json: () => Promise.reject(new TypeError('network error')) } as unknown as Response;
+    await expect(apiGet({}, async () => dropped)).rejects.toMatchObject({ kind: 'network' });
+  });
+
+  it('gives every request a timeout signal', async () => {
+    const fetchFn = vi.fn<FetchFn>(async () => json({ ok: true }));
+    await apiGet({}, fetchFn);
+    expect(fetchFn.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('reports being offline without fetching', async () => {

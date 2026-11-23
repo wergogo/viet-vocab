@@ -16,7 +16,8 @@ export interface LookupOptions {
 }
 
 /** Bump when parsing changes what a lookup returns, so results cached by older code are ignored. */
-const CACHE_VERSION = 1;
+/** Bump when parsing changes what a lookup returns (decision 13); cache-version.test.ts notices when it must. */
+export const CACHE_VERSION = 1;
 const wordKey = (spelling: string) => `w${CACHE_VERSION}:${spelling}`;
 const charKey = (char: string) => `c${CACHE_VERSION}:${char}`;
 

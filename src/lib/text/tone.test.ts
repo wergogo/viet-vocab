@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalTone, syllableVariants, toneVariant } from './tone';
+import { canonicalTone, syllableVariants, toneVariant, wordKey } from './tone';
 
 describe('syllableVariants', () => {
   it('offers both placements for oa, oe and uy without a final consonant', () => {
@@ -66,5 +66,13 @@ describe('round trips and edge cases', () => {
     expect(syllableVariants('HOẠ')).toEqual(['HỌA', 'HOẠ']);
     expect(syllableVariants('thuở')).toEqual(['thuở']);
     expect(toneVariant('hoá hóa')).toBe('hóa hoá');
+  });
+});
+
+describe('wordKey', () => {
+  it('ignores spacing, case and tone-mark placement, but not the letters or tones', () => {
+    expect(wordKey(' Văn  hóa ')).toBe(wordKey('văn hoá'));
+    expect(wordKey('văn hóa')).not.toBe(wordKey('văn hoa'));
+    expect(wordKey('văn hóa')).not.toBe(wordKey('vân hóa'));
   });
 });

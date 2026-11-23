@@ -1,8 +1,8 @@
 import { ipaFromItems, type Ipa } from './ipa';
 import { NUMBERED_ETYMOLOGY, POS_HEADINGS } from './wikitext';
 
-// Rendered Wiktionary HTML is only read, with DOMParser. Only text leaves this module, and none of it is ever
-// inserted into the app's page (spec §6.2).
+// Rendered Wiktionary HTML is only read, with DOMParser, and none of it is ever inserted into the app's page
+// (spec §6.2). The parsed elements go only to the parsers; what reaches the app is text.
 
 interface Heading {
   level: number;

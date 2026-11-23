@@ -6,7 +6,10 @@ import type { LookupEntry } from './types';
 import { COUNTED_POS, audioFileIn, splitEntries, stubTarget, vietnameseSection } from './wikitext';
 
 export interface ParsedWordPage {
-  /** Entries with at least one counted part of speech; Romanization-only entries are skipped. */
+  /**
+   * Entries with at least one counted part of speech; Romanization-only entries are skipped. When no entry has one,
+   * the first entry is kept so it can fill what it has (decision 8).
+   */
   entries: LookupEntry[];
   /** Set when the Vietnamese section is only an alternative-spelling stub (entries are then empty). */
   stubTarget: string | null;

@@ -52,11 +52,9 @@ export async function apiGet(params: Record<string, string>, fetchFn: FetchFn = 
   try {
     return await response.json();
   } catch (e) {
-    // The timeout also covers reading the body: a slow connection is a network problem, not an unreadable answer.
-    if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
-      throw new LookupError('network', UNREACHABLE);
-    }
-    throw new LookupError('response', UNREADABLE);
+    // Only an answer that isn't JSON is unreadable; a timeout or a connection lost mid-download is a network problem.
+    if (e instanceof SyntaxError) throw new LookupError('response', UNREADABLE);
+    throw new LookupError('network', UNREACHABLE);
   }
 }
 

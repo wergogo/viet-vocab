@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetDb } from '../db/db';
+import { db, resetDb } from '../db/db';
 import type { FetchFn } from './api';
 import { lookupChar, lookupWord, spellingVariants } from './lookup';
 import { FIXTURES } from './test-fixtures';
@@ -78,6 +78,28 @@ describe('lookupWord', () => {
     expect(result.title).toBe('văn hoá');
     expect(result.entries[0]!.chars?.chars).toEqual(['文', '化']);
     expect(calls).toEqual(['parse:văn hóa', 'parse:văn hoá']);
+  });
+
+  it('gives up on a stub that points to another stub or to a missing page, and fills only the IPA', async () => {
+    for (const target of [FIXTURES['van-hoa-stub'], undefined]) {
+      const { fetchFn, calls } = fakeWiktionary({
+        'parse:văn hóa': FIXTURES['van-hoa-stub'],
+        ...(target ? { 'parse:văn hoá': target } : {}),
+        'expand:{{vi-IPA|văn hóa}}': FIXTURES['ipa-sentence'],
+      });
+      const result = await lookupWord('văn hóa', { fetchFn, refresh: true });
+      expect(result).toMatchObject({ title: null, entries: [], ipaHanoi: SENTENCE_IPA });
+      expect(calls).toEqual(['parse:văn hóa', 'parse:văn hoá', 'expand:{{vi-IPA|văn hóa}}']);
+    }
+  });
+
+  it('still looks up when the cache can be neither read nor written', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(db.lookupCache, 'get').mockRejectedValue(new Error('IndexedDB is broken'));
+    vi.spyOn(db.lookupCache, 'bulkPut').mockRejectedValue(new Error('IndexedDB is broken'));
+    const { fetchFn } = fakeWiktionary({ 'parse:nhập khẩu': FIXTURES['nhap-khau'] });
+    expect((await lookupWord('nhập khẩu', { fetchFn })).title).toBe('nhập khẩu');
+    expect(logged).toHaveBeenCalledTimes(2);
   });
 
   it('tries spelling variants when the page is missing', async () => {

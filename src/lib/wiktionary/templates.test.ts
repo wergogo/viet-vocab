@@ -101,11 +101,19 @@ describe('wikiToText', () => {
 
   it('stays fast on unclosed links, tags and references', () => {
     const started = performance.now();
+    // 20 KB each, within the cap, so the patterns themselves are timed: quadratic ones take seconds to minutes here.
+    for (let i = 0; i < 100; i++) {
+      wikiToText('[[a| '.repeat(4_000));
+      wikiToText('<ref>x '.repeat(2_800));
+      wikiToText('< '.repeat(10_000));
+    }
     wikiToText('[[a| '.repeat(40_000));
-    wikiToText('<ref>x '.repeat(30_000));
-    wikiToText('< '.repeat(100_000));
-    // Quadratic matching takes seconds to minutes here; the bound only has to catch that, on slow runners too.
     expect(performance.now() - started).toBeLessThan(5000);
+  });
+
+  it('keeps the text after an unclosed reference', () => {
+    expect(wikiToText('a <ref>b')).toBe('a b');
+    expect(wikiToText('a<ref>x</ref> b <ref name="n">y</ref>c')).toBe('a b c');
   });
 
   it('keeps converting after an unclosed "{{"', () => {

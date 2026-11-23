@@ -1,6 +1,6 @@
 import { cjkChars, hasCjk } from '../text/cjk';
 import { cleanText, exactKey, hasDiacritics, looseKey, viCollator } from '../text/normalize';
-import { canonicalTone } from '../text/tone';
+import { canonicalTone, wordKey } from '../text/tone';
 import { SEARCH_KEY_SEPARATOR, type LiveWordRow } from './derive';
 
 export type SortMode = 'newest' | 'az';
@@ -51,7 +51,7 @@ export function searchWords(words: LiveWordRow[], opts: SearchOptions): LiveWord
  * exact key (headword first, then the separator), so no row is re-normalized per keystroke.
  */
 export function findDuplicates(words: LiveWordRow[], text: string, excludeId?: string): LiveWordRow[] {
-  const key = exactKey(canonicalTone(cleanText(text)));
+  const key = wordKey(text);
   if (!key) return [];
   const prefix = key + SEARCH_KEY_SEPARATOR;
   return words.filter((w) => w.id !== excludeId && (w.searchExact === key || w.searchExact.startsWith(prefix)));

@@ -173,10 +173,7 @@ function replaceTemplates(text: string, render: (call: TemplateCall) => string):
 /** Template nesting wikiToText renders; deeper levels are dropped, so a vandalized page can't overflow the stack. */
 const MAX_DEPTH = 40;
 
-/**
- * Text wikiToText reads. Its inputs are short (a meaning line, a parameter, a label); the cap bounds the reference
- * pattern, which is quadratic on many unclosed `<ref>` tags.
- */
+/** Text wikiToText reads. Its inputs are short (a meaning line, a parameter, a label); the cap only bounds hostile input. */
 const MAX_TEXT = 20_000;
 
 /**
@@ -187,9 +184,28 @@ export function wikiToText(wikitext: string): string {
   return toText(wikitext.slice(0, MAX_TEXT), 0);
 }
 
+/**
+ * Drops `<ref …/>` and `<ref …>…</ref>`. A scan rather than a lazy regex, which retried from every unclosed `<ref>`
+ * to the end of the text.
+ */
+function stripRefs(text: string): string {
+  const withoutEmpty = text.replace(/<ref[^<>]*\/>/g, '');
+  let out = '';
+  let pos = 0;
+  for (;;) {
+    const open = withoutEmpty.indexOf('<ref', pos);
+    const tagEnd = open < 0 ? -1 : withoutEmpty.indexOf('>', open);
+    const close = tagEnd < 0 ? -1 : withoutEmpty.indexOf('</ref>', tagEnd);
+    // With no closing tag after this one, there is none after any later one either: keep the rest as it is.
+    if (close < 0) return out + withoutEmpty.slice(pos);
+    out += withoutEmpty.slice(pos, open);
+    pos = close + '</ref>'.length;
+  }
+}
+
 // The link and tag patterns stop at the next "[" or "<", so unclosed links and tags can't make them quadratic.
 function toText(wikitext: string, depth: number): string {
-  const noRefs = wikitext.replace(/<ref[^<>]*\/>/g, '').replace(/<ref[^<>]*>[\s\S]*?<\/ref>/g, '');
+  const noRefs = stripRefs(wikitext);
   const noTemplates = replaceTemplates(noRefs, (call) => {
     if (depth >= MAX_DEPTH) return '';
     const name = normalizeName(call.name);

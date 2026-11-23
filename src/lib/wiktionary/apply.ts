@@ -1,7 +1,6 @@
 import type { WordDraft } from '../db/words';
-import { cleanText } from '../text/normalize';
 import { rebuildSyllables } from '../text/syllables';
-import { canonicalTone } from '../text/tone';
+import { wordKey } from '../text/tone';
 import { pairCharacters } from './characters';
 import type { LookupEntry, LookupResult } from './types';
 
@@ -48,8 +47,7 @@ export function applyIpaOnly(draft: WordDraft, result: LookupResult): WordDraft 
 
 /** Compares spellings the way lookups treat them: cleaned, case-insensitive, tone placement ignored. */
 export function sameLookupWord(a: string, b: string): boolean {
-  const key = (s: string) => canonicalTone(cleanText(s)).toLocaleLowerCase('vi');
-  return key(a) === key(b);
+  return wordKey(a) === wordKey(b);
 }
 
 /**
