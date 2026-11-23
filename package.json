@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:fake-sync": "vite --mode fake-sync --port 5174",
+    "fake-github": "node scripts/fake-github.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
