@@ -36,7 +36,6 @@
   let editing = $state(false);
   let form = $state<SyncConfig>(blank());
   let problems = $state<ConfigProblems>({});
-  let checking = false;
   let checkRun = 0;
   let checkResult = $state('');
   let checkFailed = $state(false);
@@ -102,12 +101,10 @@
   }
 
   async function testConnection() {
-    if (checking) return;
     clearCheck();
     const run = checkRun;
     const config = await formConfig();
     if (!config || run !== checkRun) return;
-    checking = true;
     checkResult = 'Checking…';
     try {
       const { words } = await checkConnection(config);
@@ -122,8 +119,6 @@
       if (run !== checkRun) return;
       checkFailed = true;
       checkResult = e instanceof SyncError ? e.message : "The check didn't finish. Please try again.";
-    } finally {
-      checking = false;
     }
   }
 

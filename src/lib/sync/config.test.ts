@@ -64,7 +64,7 @@ describe('tokens and keys', () => {
   it('names the file without regard to the case of owner and repository', () => {
     expect(fileKey({ ...good, owner: 'Me', repo: 'Viet-Vocab-Data' })).toBe(fileKey(good));
     expect(fileKey({ ...good, branch: 'Main' })).not.toBe(fileKey(good));
-    expect(fileKey(good)).toBe('me/viet-vocab-data@main:vocab.json');
+    expect(fileKey(good)).toBe('https://api.github.com me/viet-vocab-data@main:vocab.json');
   });
 });
 

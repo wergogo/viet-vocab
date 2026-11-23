@@ -111,11 +111,13 @@ export class SyncScheduler {
   /**
    * Holds automatic syncs while a review session runs (M4 decision 11). Hiding the app still pushes, and showing it again
    * still pulls, so a session doesn't review cards from states another device has moved on from. So does starting a
-   * session after the window stayed on screen a while: the first hold pulls first. Returns the release.
+   * session after the window stayed on screen a while: the first hold pulls at the start, alongside the session, which
+   * doesn't wait for it. While a cycle runs, that cycle is the pull, and no other is queued: it could upload a rating made
+   * meanwhile, during the session. Returns the release.
    */
   hold(): () => void {
     this.#holds++;
-    if (this.#holds === 1 && this.#deps.now() - this.#lastEnd >= VISIBLE_GAP_MS) this.#request('review');
+    if (this.#holds === 1 && !this.#running && this.#deps.now() - this.#lastEnd >= VISIBLE_GAP_MS) this.#request('review');
     let holding = true;
     return () => {
       if (!holding) return;

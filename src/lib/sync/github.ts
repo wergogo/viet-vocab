@@ -1,13 +1,6 @@
-import type { SyncConfig } from './config';
+import { GITHUB_API, type SyncConfig } from './config';
 import { blobSha, toBase64 } from './encoding';
 import { SyncError } from './errors';
-
-/**
- * GitHub's REST API. Browser checks point it at a local stand-in with `VITE_GITHUB_API`, in fake-sync mode only (M4
- * decision 17), so a stray variable in a production build can't send tokens elsewhere.
- */
-export const GITHUB_API: string =
-  (import.meta.env.MODE === 'fake-sync' && import.meta.env.VITE_GITHUB_API) || 'https://api.github.com';
 
 const READ_TIMEOUT_MS = 30_000;
 /** Uploading a large file over a slow phone connection takes a while. */

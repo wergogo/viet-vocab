@@ -285,13 +285,38 @@ describe('SyncScheduler', () => {
   it('keeps a push asked for by hiding the app during review, when a cycle was running', async () => {
     const s = setup();
     s.scheduler.start();
+    await s.finish();
+    s.scheduler.syncNow();
+    expect(s.runCycle).toHaveBeenCalledTimes(2);
+    // Within 30 s of the last cycle and with one running: the hold requests nothing.
     s.scheduler.hold();
     s.edit();
     s.device.visible = false;
     s.fire('document', 'visibilitychange');
-    expect(s.runCycle).toHaveBeenCalledTimes(1);
+    expect(s.runCycle).toHaveBeenCalledTimes(2);
+    await s.finish();
+    expect(s.runCycle).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not queue another pull when a review session starts while a cycle runs', async () => {
+    const s = setup();
+    s.scheduler.start();
+    await s.finish();
+    vi.advanceTimersByTime(VISIBLE_GAP_MS);
+    s.scheduler.syncNow();
+    expect(s.runCycle).toHaveBeenCalledTimes(2);
+    s.scheduler.hold();
     await s.finish();
     expect(s.runCycle).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops a queued request when stopped', async () => {
+    const s = setup();
+    s.scheduler.start();
+    s.scheduler.syncNow();
+    s.scheduler.stop();
+    await s.finish();
+    expect(s.runCycle).toHaveBeenCalledTimes(1);
   });
 
   it('tries again on the next trigger after other errors', async () => {

@@ -15,6 +15,9 @@ const port = Number(process.env.PORT ?? 8787);
 /** File contents by "owner/repo@branch:path". */
 const files = new Map();
 
+/** GitHub matches owner and repository names in any case, but not branches or paths. */
+const fileKey = (owner, repo, branch, path) => `${owner.toLowerCase()}/${repo.toLowerCase()}@${branch}:${path}`;
+
 const blobSha = (bytes) => createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
 
 function send(res, status, body, headers = {}) {
@@ -50,7 +53,7 @@ const server = createServer(async (req, res) => {
   if (req.method === 'GET') {
     const branch = url.searchParams.get('ref') ?? 'main';
     if (branch !== 'main') return json(res, 404, { message: `No commit found for the ref ${branch}` });
-    const file = files.get(`${owner}/${repo}@${branch}:${rest}`.toLowerCase());
+    const file = files.get(fileKey(owner, repo, branch, rest));
     if (!file) return json(res, 404, { message: 'Not Found' });
     const sha = blobSha(file);
     if (req.headers['if-none-match'] === `"${sha}"`) return send(res, 304, null);
@@ -64,7 +67,8 @@ const server = createServer(async (req, res) => {
       body = null;
     }
     if (typeof body !== 'object' || body === null || Array.isArray(body)) return json(res, 400, { message: 'Problems parsing JSON' });
-    const key = `${owner}/${repo}@${body.branch ?? 'main'}:${rest}`.toLowerCase();
+    if (typeof body.content !== 'string') return json(res, 422, { message: 'Invalid request. "content" wasn\'t supplied.' });
+    const key = fileKey(owner, repo, body.branch ?? 'main', rest);
     const current = files.get(key);
     if (current && !body.sha) return json(res, 422, { message: 'Invalid request. "sha" wasn\'t supplied.' });
     if (current ? body.sha !== blobSha(current) : body.sha) return json(res, 409, { message: `${rest} does not match` });

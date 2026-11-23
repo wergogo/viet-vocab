@@ -1,6 +1,13 @@
 import { deviceSetting } from '../db/deviceSetting';
 import type { ISO } from '../model/types';
 
+/**
+ * GitHub's REST API. Browser checks point it at a local stand-in with `VITE_GITHUB_API`, in fake-sync mode only (M4
+ * decision 17), so a stray variable in a production build can't send tokens elsewhere.
+ */
+export const GITHUB_API: string =
+  (import.meta.env.MODE === 'fake-sync' && import.meta.env.VITE_GITHUB_API) || 'https://api.github.com';
+
 /** Where this device syncs, and the token (spec §7.1). Kept in this browser's localStorage only. */
 export interface SyncConfig {
   owner: string;
@@ -80,9 +87,12 @@ export function isClassicToken(token: string): boolean {
   return /^(?:ghp_|gho_|ghu_)/.test(token) || /^[0-9a-f]{40}$/.test(token);
 }
 
-/** Names the file a sync went to. GitHub matches owner and repository names in any case, but not branches or paths. */
+/**
+ * Names the file a sync went to, and the API it went through, so a stand-in's record never matches GitHub's. GitHub
+ * matches owner and repository names in any case, but not branches or paths.
+ */
 export function fileKey(c: Pick<SyncConfig, 'owner' | 'repo' | 'branch' | 'path'>): string {
-  return `${c.owner.toLowerCase()}/${c.repo.toLowerCase()}@${c.branch}:${c.path}`;
+  return `${GITHUB_API} ${c.owner.toLowerCase()}/${c.repo.toLowerCase()}@${c.branch}:${c.path}`;
 }
 
 function readJson(text: string | null): Record<string, unknown> | null {

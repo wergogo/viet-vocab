@@ -1,6 +1,7 @@
 import type { SyncConfig } from './config';
 import { blobSha } from './encoding';
-import { GITHUB_API, type FetchFn } from './github';
+import { GITHUB_API } from './config';
+import type { FetchFn } from './github';
 
 /** For tests only: the settings the fake repository answers to. */
 export const TEST_CONFIG: SyncConfig = {
