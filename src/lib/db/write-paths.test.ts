@@ -7,10 +7,11 @@ import { parseWordPage } from '../wiktionary/parseWord';
 import { fixturePage } from '../wiktionary/test-fixtures';
 import type { LookupResult } from '../wiktionary/types';
 import { saveReview } from './cards';
-import { resetDb } from './db';
+import { rederiveIfNeeded, resetDb } from './db';
 import { createList, deleteList, findOrCreateList, renameList } from './lists';
 import { saveSettings } from './settings';
-import { exportJson, readLocalData } from './snapshot';
+import { exportJson, importJson, readLocalData } from './snapshot';
+import { expectDerivedFieldsFresh } from './test-utils';
 import { createWord, deleteWord, draftFromWord, emptyDraft, updateWord, type WordDraft } from './words';
 
 beforeEach(async () => {
@@ -18,42 +19,64 @@ beforeEach(async () => {
   localStorage.clear();
 });
 
-// parseFile enforces the shapes the app writes (M1 final review). Extend this when a milestone adds a write path.
+/** Every kind of write the app makes, lookup-filled words, reviews, settings and deletions included. */
+async function writeEverything() {
+  const economy = await createList('Kinh tế');
+  await findOrCreateList('KINH TẾ');
+  await renameList(economy.id, 'Kinh tế học');
+  const temporary = await createList('Tạm');
+
+  const page = fixturePage('thanh-pho');
+  const { entries } = parseWordPage(page.wikitext, page.html)!;
+  const result: LookupResult = { query: 'thành phố', title: page.title, entries, ipaHanoi: '', ipaSaigon: '', fetchedAt: nowIso() };
+  const filled: WordDraft = {
+    ...applyEntry(emptyDraft('thành phố'), result, entries[0]!).draft,
+    notes: 'line 1\nline 2',
+    listIds: [economy.id, temporary.id, economy.id],
+  };
+  const city = await createWord(filled);
+  const bare = await createWord({ ...emptyDraft('xin chào'), senses: [] });
+  await updateWord(city.id, { ...draftFromWord(city), syllables: [{ text: 'thành', char: '' }, { text: 'phố' }] });
+  await saveSettings({ newCardsPerDay: 7, reverseCards: true });
+  const good = RATINGS[2]!.grade;
+  const now = new Date();
+  for (const id of [city.id, bare.id]) await saveReview(id, 'forward', rate(undefined, good, now), now);
+  await saveReview(city.id, 'reverse', rate(undefined, good, now), now);
+  await deleteList(temporary.id);
+  await deleteWord(bare.id);
+  return { city, audioFile: entries[0]!.audioFile };
+}
+
+// parseFile enforces the shapes the app writes (M1 final review), and a sync file that fails it would stop loading on
+// every device. Extend this when a milestone adds a write path.
 describe('write paths', () => {
   it('everything the app writes, lookup-filled words, reviews and settings included, passes parseFile', async () => {
-    const economy = await createList('Kinh tế');
-    await findOrCreateList('KINH TẾ');
-    await renameList(economy.id, 'Kinh tế học');
-    const temporary = await createList('Tạm');
-
-    const page = fixturePage('thanh-pho');
-    const { entries } = parseWordPage(page.wikitext, page.html)!;
-    const result: LookupResult = { query: 'thành phố', title: page.title, entries, ipaHanoi: '', ipaSaigon: '', fetchedAt: nowIso() };
-    const filled: WordDraft = {
-      ...applyEntry(emptyDraft('thành phố'), result, entries[0]!).draft,
-      notes: 'line 1\nline 2',
-      listIds: [economy.id, temporary.id, economy.id],
-    };
-    const city = await createWord(filled);
-    const bare = await createWord({ ...emptyDraft('xin chào'), senses: [] });
-    await updateWord(city.id, { ...draftFromWord(city), syllables: [{ text: 'thành', char: '' }, { text: 'phố' }] });
-    await saveSettings({ newCardsPerDay: 7, reverseCards: true });
-    const good = RATINGS[2]!.grade;
-    const now = new Date();
-    for (const id of [city.id, bare.id]) await saveReview(id, 'forward', rate(undefined, good, now), now);
-    await saveReview(city.id, 'reverse', rate(undefined, good, now), now);
-    await deleteList(temporary.id);
-    await deleteWord(bare.id);
-
+    const { city, audioFile } = await writeEverything();
     const withTombstones = await readLocalData(true);
     expect(withTombstones.words.some((w) => w.deleted === true)).toBe(true);
     expect(withTombstones.cards.filter((c) => c.deleted === true)).toHaveLength(1);
     expect(withTombstones.settings).toMatchObject({ newCardsPerDay: 7, reverseCards: true });
     expect(() => parseFile(serializeFile(withTombstones, nowIso()))).not.toThrow();
     const exported = parseFile(await exportJson());
-    expect(exported.words.find((w) => w.id === city.id)).toMatchObject({
-      audioFile: entries[0]!.audioFile,
-      source: { wiktionaryTitle: 'thành phố' },
-    });
+    expect(exported.words.find((w) => w.id === city.id)).toMatchObject({ audioFile, source: { wiktionaryTitle: 'thành phố' } });
+  });
+
+  it('comes back the same through export, import and a forced re-derive, and the sync file holds only synced data', async () => {
+    await writeEverything();
+    const exported = await exportJson();
+    const syncFile = serializeFile(await readLocalData(true), nowIso());
+    // The lookup cache and derived search keys stay on the device (spec §4.3).
+    expect(Object.keys(JSON.parse(syncFile) as object)).toEqual(['app', 'schemaVersion', 'savedAt', 'words', 'lists', 'cards', 'settings']);
+    expect(syncFile).not.toContain('searchLoose');
+
+    await resetDb();
+    await importJson(exported);
+    localStorage.removeItem('vv.derive.version');
+    expect(await rederiveIfNeeded()).toBe(true);
+    await expectDerivedFieldsFresh();
+    expect(parseFile(await exportJson()).words).toEqual(parseFile(exported).words);
+
+    await importJson(syncFile);
+    expect(serializeFile(await readLocalData(true), 'same time')).toBe(serializeFile(parseFile(syncFile), 'same time'));
   });
 });

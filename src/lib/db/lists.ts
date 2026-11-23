@@ -3,7 +3,6 @@ import { isLive, tombstone } from '../model/types';
 import { newId, nextTimestamp, nowIso } from '../model/ids';
 import { cleanText, viCollator } from '../text/normalize';
 import { db } from './db';
-import { isLiveRow } from './derive';
 import { markDirty } from './dirty';
 import { RecordNotFoundError } from './errors';
 
@@ -56,16 +55,16 @@ export async function renameList(id: string, name: string): Promise<void> {
   if (changed) markDirty();
 }
 
-/** Tombstones the list and removes its id from every word that had it. Deleting twice does nothing. */
+/**
+ * Tombstones the list; deleting twice does nothing. Its words keep its id, which every read ignores (spec §4.2), until
+ * they are next saved. Rewriting them here would stamp them newer than an edit made on another device meanwhile, and
+ * undo that edit (M4 decision 9).
+ */
 export async function deleteList(id: string): Promise<void> {
-  const changed = await db.transaction('rw', db.lists, db.words, async () => {
+  const changed = await db.transaction('rw', db.lists, async () => {
     const list = await db.lists.get(id);
     if (list && !isLive(list)) return false;
     await db.lists.put(tombstone(id, nextTimestamp(list?.updatedAt)));
-    const affected = (await db.words.toArray()).filter(isLiveRow).filter((w) => w.listIds.includes(id));
-    await db.words.bulkPut(
-      affected.map((w) => ({ ...w, listIds: w.listIds.filter((l) => l !== id), updatedAt: nextTimestamp(w.updatedAt) })),
-    );
     return true;
   });
   if (changed) markDirty();

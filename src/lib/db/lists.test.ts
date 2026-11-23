@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, resetDb } from './db';
 import { createList, deleteList, findOrCreateList, listLiveLists, listNameKey, renameList } from './lists';
-import { createWord, emptyDraft, getWord } from './words';
+import { createWord, draftFromWord, emptyDraft, getWord, updateWord } from './words';
 import { expectDerivedFieldsFresh } from './test-utils';
 import { isDirty } from './dirty';
 
@@ -63,16 +63,14 @@ describe('lists', () => {
     expect(await db.lists.get(list.id)).toMatchObject({ name: 'Economy', updatedAt: '2026-01-02T00:00:00.000Z' });
   });
 
-  it('deleting a list tombstones it and removes it from words', async () => {
+  it('deleting a list tombstones it and leaves its words as they were (M4 decision 9)', async () => {
     const list = await createList('Economy');
     const w = await createWord({ ...emptyDraft('nhập khẩu'), senses: [{ pos: 'Verb', meaning: 'to import' }], listIds: [list.id] });
     vi.setSystemTime(new Date('2026-01-05T00:00:00.000Z'));
     await deleteList(list.id);
     expect(await listLiveLists()).toEqual([]);
     expect(await db.lists.get(list.id)).toEqual({ id: list.id, updatedAt: '2026-01-05T00:00:00.000Z', deleted: true });
-    const updated = await getWord(w.id);
-    expect(updated?.listIds).toEqual([]);
-    expect(updated?.updatedAt).toBe('2026-01-05T00:00:00.000Z');
+    expect(await getWord(w.id)).toEqual(w);
   });
 
   it('refuses to rename a deleted list and ignores a second delete', async () => {
@@ -87,15 +85,14 @@ describe('lists', () => {
     expect(isDirty()).toBe(false);
   });
 
-  it('only touches words that had the deleted list', async () => {
+  it("drops a deleted list's id when its word is next saved, and keeps unknown ids", async () => {
     const econ = await createList('Economy');
     const news = await createList('News');
-    const both = await createWord({ ...emptyDraft('nhập khẩu'), senses: [{ pos: 'Verb', meaning: 'to import' }], listIds: [econ.id, news.id] });
-    const other = await createWord({ ...emptyDraft('quốc gia'), senses: [{ pos: 'Noun', meaning: 'nation' }], listIds: [news.id] });
-    vi.setSystemTime(new Date('2026-01-05T00:00:00.000Z'));
+    const word = await createWord({ ...emptyDraft('nhập khẩu'), listIds: [econ.id, 'from-another-device', news.id] });
     await deleteList(econ.id);
-    expect((await getWord(both.id))?.listIds).toEqual([news.id]);
-    expect(await getWord(other.id)).toEqual(other);
+    const saved = await updateWord(word.id, draftFromWord(word));
+    expect(saved.listIds).toEqual(['from-another-device', news.id]);
+    expect((await getWord(word.id))?.listIds).toEqual(['from-another-device', news.id]);
   });
 
   it('stamps renames 1 ms after a future updatedAt and skips no-op renames', async () => {

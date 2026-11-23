@@ -104,13 +104,18 @@ export async function getWord(id: string): Promise<Word | undefined> {
   return isLive(record) ? record : undefined;
 }
 
-/** Saves an edit. Reads and writes in one transaction, so a concurrent delete can't be overwritten. */
+/**
+ * Saves an edit. Reads and writes in one transaction, so a concurrent delete can't be overwritten. The ids of lists
+ * that were deleted are dropped now, since deleting a list leaves them on its words (M4 decision 9); unknown ids stay.
+ */
 export async function updateWord(id: string, d: WordDraft): Promise<Word> {
   const fields = normalizeDraft(d);
-  const word = await db.transaction('rw', db.words, async () => {
+  const word = await db.transaction('rw', db.words, db.lists, async () => {
     const row = await db.words.get(id);
     if (!row || !isLiveRow(row)) throw new RecordNotFoundError(`Word ${id} not found`);
-    const next: Word = { id, ...fields, createdAt: row.createdAt, updatedAt: nextTimestamp(row.updatedAt) };
+    const lists = await db.lists.bulkGet(fields.listIds);
+    const listIds = fields.listIds.filter((_, i) => lists[i]?.deleted !== true);
+    const next: Word = { id, ...fields, listIds, createdAt: row.createdAt, updatedAt: nextTimestamp(row.updatedAt) };
     await db.words.put(toRow(next));
     return next;
   });
