@@ -42,6 +42,8 @@
         <ExternalLink href="https://dexie.org/">Dexie</ExternalLink> (Apache-2.0). The bundled libraries'
         <ExternalLink href={`${import.meta.env.BASE_URL}licenses.txt`}>licence texts</ExternalLink>.
       </li>
+      <!-- Dexie's NOTICE file, which its Apache-2.0 licence asks to be shown with the credits. -->
+      <li>Dexie.js: Copyright (c) 2014-2017 David Fahlander.</li>
     </ul>
   </section>
 </div>

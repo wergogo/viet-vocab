@@ -71,7 +71,8 @@ export class Updater {
     if (deps.now() - this.#lastCheck < UPDATE_CHECK_GAP_MS) return;
     this.#lastCheck = deps.now();
     this.#registration.update().catch(() => {
-      // Offline after all, or a server error: the next return to the app asks again.
+      // Offline after all, or a server error. The gap counts from this try, so a return to the app after
+      // UPDATE_CHECK_GAP_MS asks again.
     });
   }
 

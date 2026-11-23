@@ -42,6 +42,7 @@ Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.y
 - Dictionary content from [Wiktionary](https://en.wiktionary.org/), under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); the test fixtures in `tests/fixtures/wiktionary/` too.
 - Simplified/traditional character data from [OpenCC](https://github.com/BYVoid/OpenCC) (Apache-2.0).
 - Built with Svelte, Vite, vite-plugin-pwa, Workbox and ts-fsrs (MIT), and Dexie (Apache-2.0).
+- Dexie.js: Copyright (c) 2014-2017 David Fahlander.
 - The icon's 越 is drawn in Noto Serif SC (SIL Open Font License 1.1).
 
 ## License

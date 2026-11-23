@@ -10,7 +10,8 @@ import { startSync } from './lib/sync/sync';
 const target = document.getElementById('app');
 if (!target) throw new Error('#app element missing');
 
-// First, so a new version that finishes installing during a slow start still shows the update bar (spec §10).
+// Before the database, so the service worker still registers, and a fixed version can still arrive, when the database
+// won't open (spec §10).
 startUpdates();
 
 void start({

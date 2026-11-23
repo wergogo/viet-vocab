@@ -36,6 +36,11 @@ export default defineConfig(({ command, mode, isPreview }) => ({
       registerType: 'prompt',
       injectRegister: false, // src/lib/pwa/pwa.ts registers it
       includeAssets: ['favicon.png'],
+      workbox: {
+        // The service worker answers every page load in its scope with the app, so About's link to the licence texts
+        // would open the app again. Loads of that file go to the network instead.
+        navigateFallbackDenylist: [/\/licenses\.txt$/],
+      },
       manifest: {
         id: BASE,
         name: 'Viet Vocab',
