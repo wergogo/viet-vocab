@@ -1,3 +1,4 @@
+import type { Region } from '../model/types';
 import { cjkChars, hasCjk } from '../text/cjk';
 import { cleanText, exactKey, hasDiacritics, looseKey, viCollator } from '../text/normalize';
 import { canonicalTone, wordKey } from '../text/tone';
@@ -11,6 +12,8 @@ export type VariantFn = (ch: string) => string[];
 export interface SearchOptions {
   query: string;
   listId?: string;
+  /** Only words used in any of these regions (spec §5.1); none or an empty list keeps every word. */
+  regions?: readonly Region[];
   sort: SortMode;
   /** Defaults to the character alone. */
   variants?: VariantFn;
@@ -41,7 +44,9 @@ export function matchesQuery(w: LiveWordRow, query: string, variants?: VariantFn
 
 export function searchWords(words: LiveWordRow[], opts: SearchOptions): LiveWordRow[] {
   const matches = compileQuery(opts.query, opts.variants);
-  const results = words.filter((w) => (!opts.listId || w.listIds.includes(opts.listId)) && matches(w));
+  const regions = opts.regions ?? [];
+  const inRegion = (w: LiveWordRow) => regions.length === 0 || (w.regions ?? []).some((r) => regions.includes(r));
+  const results = words.filter((w) => (!opts.listId || w.listIds.includes(opts.listId)) && inRegion(w) && matches(w));
   if (opts.sort === 'az') return results.sort((a, b) => viCollator.compare(a.word, b.word));
   return results.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
 }

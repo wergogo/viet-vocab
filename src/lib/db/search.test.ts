@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Word } from '../model/types';
+import type { Region, Word } from '../model/types';
 import { toRow, type LiveWordRow } from './derive';
 import { findDuplicates, matchesQuery, searchWords } from './search';
 
@@ -72,6 +72,21 @@ describe('searchWords', () => {
   it('sorts newest first or in Vietnamese A–Z order', () => {
     expect(ids(searchWords(words, { query: '', sort: 'newest' }))).toEqual(['4', '3', '2', '1']);
     expect(ids(searchWords(words, { query: '', sort: 'az' }))).toEqual(['2', '1', '4', '3']);
+  });
+});
+
+describe('searchWords by region', () => {
+  const regional = (r: LiveWordRow, regions: Region[]): LiveWordRow => ({ ...r, regions });
+  const rows = [regional(words[0]!, ['north']), regional(words[1]!, ['central', 'south']), words[2]!];
+
+  it('shows a word when it has any of the chosen regions', () => {
+    expect(ids(searchWords(rows, { query: '', regions: ['south'], sort: 'newest' }))).toEqual(['2']);
+    expect(ids(searchWords(rows, { query: '', regions: ['north', 'central'], sort: 'newest' }))).toEqual(['2', '1']);
+    expect(ids(searchWords(rows, { query: 'nhap', regions: ['north'], sort: 'newest' }))).toEqual(['1']);
+  });
+
+  it('keeps every word when no region is chosen', () => {
+    expect(ids(searchWords(rows, { query: '', regions: [], sort: 'newest' }))).toEqual(['3', '2', '1']);
   });
 });
 

@@ -1,10 +1,12 @@
 <script lang="ts">
   import { searchWords, type SortMode } from '../../db/search';
+  import type { Region } from '../../model/types';
   import { buildQueue } from '../../review/queue';
   import { cjkChars, hasCjk } from '../../text/cjk';
   import { charVariants, loadStTable, type StTable } from '../../text/variants';
   import { href } from '../router';
   import { liveCards, liveLists, liveSettings, liveWords } from '../stores';
+  import RegionToggles from '../components/RegionToggles.svelte';
   import WordRowItem from '../components/WordRowItem.svelte';
 
   /** Rows rendered per page; the count still reflects every match. */
@@ -12,6 +14,7 @@
 
   let query = $state('');
   let listId = $state('');
+  let regions = $state<Region[]>([]);
   let sort = $state<SortMode>('newest');
   let table = $state<StTable | null>(null);
   let tableFailed = $state(false);
@@ -41,6 +44,7 @@
     return searchWords($liveWords ?? [], {
       query,
       listId: effectiveListId || undefined,
+      regions,
       sort,
       variants: t ? (c) => charVariants(c, t) : undefined,
     });
@@ -79,6 +83,11 @@
   function resetLimit() {
     limit = PAGE;
   }
+
+  function setRegions(value: Region[]) {
+    regions = value;
+    resetLimit();
+  }
 </script>
 
 <div class="stack">
@@ -111,6 +120,10 @@
       <option value="newest">Newest first</option>
       <option value="az">A–Z</option>
     </select>
+  </div>
+  <div class="row region-filter">
+    <span class="muted" aria-hidden="true">Region</span>
+    <RegionToggles bind:selected={() => regions, setRegions} label="Filter by region" />
   </div>
 
   {#if toReview > 0}
@@ -159,6 +172,7 @@
 <style>
   .row select { flex: 1; }
   .chip.review { align-self: flex-start; }
+  .region-filter > span { font-size: 14px; }
   .count, .note { margin: 0; font-size: 14px; }
   .card p, p { margin: 0; }
 </style>

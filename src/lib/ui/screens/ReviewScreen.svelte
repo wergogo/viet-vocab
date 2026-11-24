@@ -11,6 +11,7 @@
   import { href } from '../router';
   import { liveCards, liveLists, liveSettings, liveWords } from '../stores';
   import AudioButton from '../components/AudioButton.svelte';
+  import RegionTags from '../components/RegionTags.svelte';
   import WordCard from '../components/WordCard.svelte';
 
   // `listId` is constant per instance: App.svelte remounts this screen per route via {#key}.
@@ -152,11 +153,13 @@
           <p class="prompt" lang="vi">{session.current.word.word}</p>
           <AudioButton text={session.current.word.word} audioFile={session.current.word.audioFile} />
         </div>
+        <RegionTags regions={session.current.word.regions} />
         <p class="muted hint">What does it mean?</p>
       {:else}
         <dl class="meanings">
           {#each session.current.word.senses.filter((s) => s.meaning) as s, i (i)}<dt>{s.pos || 'Meaning'}</dt><dd>{s.meaning}</dd>{/each}
         </dl>
+        <RegionTags regions={session.current.word.regions} />
         <p class="muted hint">Which word is it?</p>
       {/if}
     </section>
