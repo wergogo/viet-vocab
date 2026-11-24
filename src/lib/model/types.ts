@@ -15,6 +15,17 @@ export interface Sense {
   meaning: string;
 }
 
+/** Where a word is used (spec §4.1). */
+export type Region = 'north' | 'central' | 'south';
+
+/** A word with the same meaning that is used in other regions: on xe lửa, tàu hoả (Northern). */
+export interface Equivalent {
+  /** Unicode NFC: "tàu hoả". */
+  word: string;
+  /** Where that word is used, when known. */
+  regions?: Region[];
+}
+
 export interface Word {
   id: string;
   /** As entered, Unicode NFC: "nhập khẩu". */
@@ -25,6 +36,10 @@ export interface Word {
   ipaSaigon?: string;
   etymology?: string;
   notes?: string;
+  /** Where the word is used; absent when it's used everywhere, or that isn't known. */
+  regions?: Region[];
+  /** Words with the same meaning that are used in other regions. */
+  equivalents?: Equivalent[];
   listIds: string[];
   /** Wikimedia Commons file name of a recording. */
   audioFile?: string;
@@ -121,3 +136,11 @@ export const DEFAULT_SETTINGS: Readonly<ReviewSettings> = {
 
 /** Every setting, in a fixed order. `DEFAULT_SETTINGS` must name each one, so none can be left out. */
 export const SETTING_NAMES = Object.keys(DEFAULT_SETTINGS) as readonly SettingName[];
+
+/** Every region, in the order regions are stored and shown (spec §4.2). */
+export const REGIONS: readonly Region[] = ['north', 'central', 'south'];
+
+/** The regions in `values`, each once, in the order of `REGIONS`. Anything else is left out. */
+export function sortRegions(values: readonly string[]): Region[] {
+  return REGIONS.filter((r) => values.includes(r));
+}

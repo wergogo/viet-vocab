@@ -1,14 +1,21 @@
-import type { Sense, Syllable, Word } from '../model/types';
-import { isLive, tombstone } from '../model/types';
+import type { Equivalent, Region, Sense, Syllable, Word } from '../model/types';
+import { isLive, sortRegions, tombstone } from '../model/types';
 import { newId, nextTimestamp, nowIso } from '../model/ids';
 import { cleanMultiline, cleanText } from '../text/normalize';
 import { rebuildSyllables } from '../text/syllables';
+import { wordKey } from '../text/tone';
 import { db } from './db';
 import { fromRow, isLiveRow, toRow, type LiveWordRow } from './derive';
 import { markDirty } from './dirty';
 import { RecordNotFoundError } from './errors';
 
-/** What the add/edit form edits. Empty strings mean "not set". */
+/** A row of the form's "Same word in other regions". */
+export interface EquivalentDraft {
+  word: string;
+  regions: Region[];
+}
+
+/** What the add/edit form edits. Empty strings and lists mean "not set". */
 export interface WordDraft {
   word: string;
   syllables: Syllable[];
@@ -17,6 +24,8 @@ export interface WordDraft {
   ipaSaigon: string;
   etymology: string;
   notes: string;
+  regions: Region[];
+  equivalents: EquivalentDraft[];
   listIds: string[];
   audioFile?: string;
   source?: Word['source'];
@@ -33,8 +42,15 @@ export function emptyDraft(word = ''): WordDraft {
     ipaSaigon: '',
     etymology: '',
     notes: '',
+    regions: [],
+    equivalents: [],
     listIds: [],
   };
+}
+
+/** An equivalent as the form edits it. */
+export function draftEquivalent(e: Equivalent): EquivalentDraft {
+  return { word: e.word, regions: [...(e.regions ?? [])] };
 }
 
 export function draftFromWord(w: Word): WordDraft {
@@ -46,6 +62,8 @@ export function draftFromWord(w: Word): WordDraft {
     ipaSaigon: w.ipaSaigon ?? '',
     etymology: w.etymology ?? '',
     notes: w.notes ?? '',
+    regions: [...(w.regions ?? [])],
+    equivalents: (w.equivalents ?? []).map(draftEquivalent),
     listIds: [...w.listIds],
     audioFile: w.audioFile,
     source: w.source ? { ...w.source } : undefined,
@@ -57,6 +75,24 @@ function optional(s: string | undefined, multiline = false): string | undefined 
   if (s === undefined) return undefined;
   const t = multiline ? cleanMultiline(s) : cleanText(s);
   return t ? t : undefined;
+}
+
+/**
+ * Equivalents as they are stored (spec §4.2): cleaned words, each with its regions in order, or none. Empty ones are
+ * dropped, and so are ones that match `word` or an earlier equivalent, ignoring case and tone-mark placement.
+ */
+export function normalizeEquivalents(word: string, equivalents: readonly EquivalentDraft[]): Equivalent[] {
+  const seen = new Set([wordKey(word)]);
+  const out: Equivalent[] = [];
+  for (const e of equivalents) {
+    const text = cleanText(e.word);
+    const key = wordKey(text);
+    if (!text || seen.has(key)) continue;
+    seen.add(key);
+    const regions = sortRegions(e.regions);
+    out.push(regions.length > 0 ? { word: text, regions } : { word: text });
+  }
+  return out;
 }
 
 /** Cleans a draft into stored word fields. Throws if the word is empty. */
@@ -79,11 +115,15 @@ export function normalizeDraft(d: WordDraft): WordFields {
   const ipaSaigon = optional(d.ipaSaigon);
   const etymology = optional(d.etymology, true);
   const notes = optional(d.notes, true);
+  const regions = sortRegions(d.regions);
+  const equivalents = normalizeEquivalents(word, d.equivalents);
   const audioFile = optional(d.audioFile);
   if (ipaHanoi) fields.ipaHanoi = ipaHanoi;
   if (ipaSaigon) fields.ipaSaigon = ipaSaigon;
   if (etymology) fields.etymology = etymology;
   if (notes) fields.notes = notes;
+  if (regions.length > 0) fields.regions = regions;
+  if (equivalents.length > 0) fields.equivalents = equivalents;
   if (audioFile) fields.audioFile = audioFile;
   if (d.source) fields.source = { ...d.source };
   return fields;

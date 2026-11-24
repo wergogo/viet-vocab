@@ -79,6 +79,28 @@ describe('normalizeDraft', () => {
     expect(result.syllables[0]?.char).toBe(compat.normalize('NFC'));
     expect(result.syllables[0]?.char).not.toBe(compat);
   });
+
+  it('stores regions in order, each once, and leaves out an empty list', () => {
+    expect(normalizeDraft(draft({ regions: ['south', 'north', 'south'] })).regions).toEqual(['north', 'south']);
+    expect(normalizeDraft(draft({ regions: [] }))).not.toHaveProperty('regions');
+  });
+
+  it('cleans equivalents, and drops empty ones, the word itself and repeats', () => {
+    const result = normalizeDraft({
+      ...emptyDraft('xe lửa'),
+      equivalents: [
+        { word: '  tàu   hoả '.normalize('NFD'), regions: ['north', 'north'] },
+        { word: '   ', regions: ['south'] },
+        { word: 'Xe Lửa', regions: [] },
+        { word: 'tàu hỏa', regions: ['central'] },
+        { word: 'xe hoả', regions: [] },
+      ],
+    });
+    expect(result.equivalents).toEqual([{ word: 'tàu hoả', regions: ['north'] }, { word: 'xe hoả' }]);
+    expect(normalizeDraft({ ...emptyDraft('xe lửa'), equivalents: [{ word: ' ', regions: [] }] })).not.toHaveProperty(
+      'equivalents',
+    );
+  });
 });
 
 describe('createWord / getWord / draftFromWord', () => {
@@ -98,6 +120,24 @@ describe('createWord / getWord / draftFromWord', () => {
     expect(d.notes).toBe('news word');
     expect(d.ipaSaigon).toBe('');
     expect(normalizeDraft(d)).toEqual(normalizeDraft(draft({ notes: 'news word' })));
+  });
+
+  it('keeps regions and equivalents through an edit, and copies them into the draft', async () => {
+    const w = await createWord({
+      ...emptyDraft('xe lửa'),
+      regions: ['south'],
+      equivalents: [{ word: 'tàu hoả', regions: ['north'] }, { word: 'xe hoả', regions: [] }],
+    });
+    expect(w).toMatchObject({ regions: ['south'], equivalents: [{ word: 'tàu hoả', regions: ['north'] }, { word: 'xe hoả' }] });
+    const d = draftFromWord(w);
+    expect(d.equivalents).toEqual([{ word: 'tàu hoả', regions: ['north'] }, { word: 'xe hoả', regions: [] }]);
+    d.regions.push('north');
+    d.equivalents[0]!.regions.push('central');
+    expect(w.regions).toEqual(['south']);
+    expect(w.equivalents?.[0]?.regions).toEqual(['north']);
+    const cleared = await updateWord(w.id, { ...draftFromWord(w), regions: [], equivalents: [] });
+    expect(cleared).not.toHaveProperty('regions');
+    expect(cleared).not.toHaveProperty('equivalents');
   });
 });
 

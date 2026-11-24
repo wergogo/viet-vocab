@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, isLive, tombstone, type List, type Rec } from './types';
+import { DEFAULT_SETTINGS, isLive, sortRegions, tombstone, type List, type Rec } from './types';
 
 describe('isLive / tombstone', () => {
   it('separates live records from tombstones', () => {
@@ -16,5 +16,13 @@ describe('isLive / tombstone', () => {
 
   it('has the spec defaults for review settings', () => {
     expect(DEFAULT_SETTINGS).toEqual({ newCardsPerDay: 20, reverseCards: false });
+  });
+});
+
+describe('sortRegions', () => {
+  it('puts regions in the order north, central, south, each once', () => {
+    expect(sortRegions(['south', 'north', 'south'])).toEqual(['north', 'south']);
+    expect(sortRegions(['central', 'west'])).toEqual(['central']);
+    expect(sortRegions([])).toEqual([]);
   });
 });
