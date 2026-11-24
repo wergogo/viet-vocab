@@ -1,4 +1,4 @@
-import type { Region, Sense } from '../model/types';
+import type { Equivalent, Region, Sense } from '../model/types';
 import type { EntryChars } from './characters';
 
 /** One etymology of a Wiktionary page, ready to fill the add form. */
@@ -13,6 +13,8 @@ export interface LookupEntry {
   ipaSaigon: string;
   /** Where the word is used, from the regional labels of its meanings; empty when none has one. */
   regions: Region[];
+  /** Words with the same meaning in other regions, from its regionally qualified synonyms. */
+  equivalents: Equivalent[];
   /** Wikimedia Commons file name of a recording. */
   audioFile?: string;
 }

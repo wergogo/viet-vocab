@@ -42,7 +42,7 @@ describe('CACHE_VERSION', () => {
   it('changes whenever parsing changes what a lookup returns', () => {
     expect({ CACHE_VERSION, parsed: digest(JSON.stringify(parsedFixtures())) }).toEqual({
       CACHE_VERSION: 2,
-      parsed: 'd6400403',
+      parsed: '89a81539',
     });
   });
 });

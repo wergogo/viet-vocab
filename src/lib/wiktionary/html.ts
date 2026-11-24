@@ -1,7 +1,7 @@
-import type { Region } from '../model/types';
+import type { Equivalent, Region } from '../model/types';
 import { ipaFromItems, type Ipa } from './ipa';
 import { parseHtml } from './parse';
-import { labelRegions } from './regions';
+import { labelRegions, regionalTerms, synonymLineTerms } from './regions';
 import { NUMBERED_ETYMOLOGY, POS_HEADINGS } from './wikitext';
 
 // Rendered Wiktionary HTML is only read, with DOMParser (through parseHtml), and none of it is ever inserted into the
@@ -87,6 +87,8 @@ export interface HtmlEntry {
   /** From the entry's own pronunciation section; empty strings when it has none. */
   ipa: Ipa;
   pos: HtmlPos[];
+  /** Regionally qualified synonyms: from synonym lines under its meanings, then from its Synonyms sections. */
+  synonyms: Equivalent[];
 }
 
 export interface HtmlSection {
@@ -104,13 +106,13 @@ export function splitHtmlEntries(elements: readonly Element[]): HtmlSection {
   const entries: HtmlEntry[] = [];
   const items = new Map<HtmlEntry, Element[]>();
   const newEntry = (title: string | null): HtmlEntry => {
-    const e: HtmlEntry = { title, etymology: '', ipa: { hanoi: '', saigon: '' }, pos: [] };
+    const e: HtmlEntry = { title, etymology: '', ipa: { hanoi: '', saigon: '' }, pos: [], synonyms: [] };
     entries.push(e);
     items.set(e, []);
     return e;
   };
   let entry: HtmlEntry | null = numbered ? null : newEntry(null);
-  let mode: 'etymology' | 'pronunciation' | 'pos' | 'other' = 'other';
+  let mode: 'etymology' | 'pronunciation' | 'pos' | 'synonyms' | 'other' = 'other';
   let pos: HtmlPos | null = null;
   for (const el of elements) {
     const h = headingOf(el);
@@ -127,6 +129,8 @@ export function splitHtmlEntries(elements: readonly Element[]): HtmlSection {
         pos = { name: h.text, definitions: [], regions: [] };
         entry.pos.push(pos);
         mode = 'pos';
+      } else if (h.text === 'Synonyms') {
+        mode = 'synonyms';
       } else {
         mode = 'other';
       }
@@ -137,9 +141,14 @@ export function splitHtmlEntries(elements: readonly Element[]): HtmlSection {
       if (text) entry.etymology = entry.etymology ? `${entry.etymology}\n${text}` : text;
     } else if (mode === 'pronunciation') {
       (entry ? items.get(entry)! : sharedItems).push(...Array.from(el.querySelectorAll('li')));
-    } else if (mode === 'pos' && pos && pos.definitions.length === 0 && el.tagName === 'OL') {
+    } else if (mode === 'pos' && entry && pos && pos.definitions.length === 0 && el.tagName === 'OL') {
       pos.definitions = definitionsOf(el);
       pos.regions = labelRegions(el);
+      entry.synonyms.push(...synonymLineTerms(el));
+    } else if (mode === 'synonyms' && entry) {
+      // The top-level items of any list, including the one inside the columns that `{{col}}` makes.
+      const items = Array.from(el.querySelectorAll('li')).filter((li) => !li.parentElement?.closest('li'));
+      entry.synonyms.push(...items.flatMap(regionalTerms));
     }
   }
   for (const e of entries) e.ipa = ipaFromItems(items.get(e) ?? []);

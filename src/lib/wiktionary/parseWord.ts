@@ -1,6 +1,7 @@
 import { sortRegions, type Region, type Sense } from '../model/types';
 import { charactersFromEntry } from './characters';
 import { splitHtmlEntries, vietnameseElements } from './html';
+import { equivalentsOf } from './regions';
 import { wikiToText } from './templates';
 import type { LookupEntry } from './types';
 import { COUNTED_POS, audioFileIn, splitEntries, stubTarget, vietnameseSection } from './wikitext';
@@ -52,6 +53,7 @@ export function parseWordPage(wikitext: string, html: string): ParsedWordPage | 
       const pos = cls ? `${hp.name} (classifier: ${wikiToText(cls)})` : hp.name;
       for (const meaning of hp.definitions) senses.push({ pos, meaning });
     });
+    const own = sortRegions(regions);
     const entry: LookupEntry = {
       label: [we.title, [...new Set(posNames)].join(', ')].filter(Boolean).join(' · '),
       chars: charactersFromEntry(we),
@@ -59,7 +61,8 @@ export function parseWordPage(wikitext: string, html: string): ParsedWordPage | 
       etymology: he?.etymology ?? '',
       ipaHanoi: ipa.hanoi,
       ipaSaigon: ipa.saigon,
-      regions: sortRegions(regions),
+      regions: own,
+      equivalents: equivalentsOf(he?.synonyms ?? [], own),
     };
     const audio = audioFileIn(we.text) ?? sharedAudio;
     if (audio) entry.audioFile = audio;

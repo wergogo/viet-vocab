@@ -1,4 +1,7 @@
-import { sortRegions, type Region } from '../model/types';
+import { sortRegions, type Equivalent, type Region } from '../model/types';
+import { hasCjk } from '../text/cjk';
+import { cleanText } from '../text/normalize';
+import { wordKey } from '../text/tone';
 
 /**
  * Places whose names put a label or qualifier in a region (spec §6.2), lowercase. They follow the regional categories
@@ -68,4 +71,59 @@ export function regionsNamed(texts: readonly string[]): Region[] {
 /** The regions named by the labels in front of the meanings in a definition list (`span.usage-label-sense`). */
 export function labelRegions(list: Element): Region[] {
   return regionsNamed(Array.from(list.querySelectorAll('.usage-label-sense'), (el) => el.textContent ?? ''));
+}
+
+const TEXT_NODE = 3;
+const ELEMENT_NODE = 1;
+
+/**
+ * The regionally qualified Vietnamese terms in a synonym list item or a synonym line (spec §6.2), such as
+ * `{{vi-l|tàu hoả}} {{qualifier|northern Vietnam}}` or `{{syn|vi|bát<q:Northern Vietnam>}}`. The item is split into
+ * parts at "," and ";", and each term takes the regions that the qualifiers of its part name, before or after it. A
+ * sense qualifier ("(train):") belongs to the whole item, so it is skipped. Terms with no regional qualifier, and Han
+ * spellings, are left out.
+ */
+export function regionalTerms(item: Element): Equivalent[] {
+  const out: Equivalent[] = [];
+  let words: string[] = [];
+  let qualifiers: string[] = [];
+  const endPart = () => {
+    const regions = regionsNamed(qualifiers);
+    if (regions.length > 0) for (const word of words) out.push({ word, regions });
+    words = [];
+    qualifiers = [];
+  };
+  for (const node of Array.from(item.childNodes)) {
+    if (node.nodeType === TEXT_NODE && /[,;]/.test(node.textContent ?? '')) endPart();
+    if (node.nodeType !== ELEMENT_NODE) continue;
+    const el = node as Element;
+    if (el.classList.contains('qualifier-content')) qualifiers.push(el.textContent ?? '');
+    else if (el.classList.contains('sense-qualifier-colon')) qualifiers = [];
+    else if (el.getAttribute('lang') === 'vi') {
+      const word = cleanText(el.textContent ?? '');
+      if (word && !hasCjk(word)) words.push(word);
+    }
+  }
+  endPart();
+  return out;
+}
+
+/** The regionally qualified terms on the synonym lines under the meanings of a definition list (`span.nyms.synonym`). */
+export function synonymLineTerms(list: Element): Equivalent[] {
+  return Array.from(list.querySelectorAll('.nyms.synonym')).flatMap(regionalTerms);
+}
+
+/**
+ * An entry's equivalents, from its regionally qualified synonyms: each term once (by the duplicate check's key), with
+ * the regions of all its mentions. Terms used only where the entry's word is used are left out.
+ */
+export function equivalentsOf(terms: readonly Equivalent[], own: readonly Region[]): Equivalent[] {
+  const byKey = new Map<string, { word: string; regions: Region[] }>();
+  for (const t of terms) {
+    const key = wordKey(t.word);
+    const found = byKey.get(key);
+    if (found) found.regions = sortRegions([...found.regions, ...(t.regions ?? [])]);
+    else byKey.set(key, { word: t.word, regions: [...(t.regions ?? [])] });
+  }
+  return [...byKey.values()].filter((e) => e.regions.some((r) => !own.includes(r)));
 }

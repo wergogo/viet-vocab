@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { Equivalent } from '../model/types';
 import { parseHtml } from './parse';
-import { labelRegions, regionsIn, regionsNamed } from './regions';
+import { equivalentsOf, labelRegions, regionalTerms, regionsIn, regionsNamed } from './regions';
 
 describe('regionsIn', () => {
   it('reads regional labels as Wiktionary shows them, and qualifiers as they are typed', () => {
@@ -50,5 +51,45 @@ describe('labelRegions', () => {
         '<li><span class="usage-label-sense">(colloquial)</span> pork</li></ol>',
     ).querySelector('ol')!;
     expect(labelRegions(list)).toEqual(['north', 'central', 'south']);
+  });
+});
+
+describe('regionalTerms', () => {
+  const item = (html: string) => parseHtml(`<ul><li>${html}</li></ul>`).querySelector('li')!;
+  const q = (text: string) =>
+    `<span class="ib-brac qualifier-brac">(</span><span class="ib-content qualifier-content">${text}</span><span class="ib-brac qualifier-brac">)</span>`;
+  const sense = (text: string) => `${q(text)}<span class="ib-colon sense-qualifier-colon">:</span>`;
+  const term = (word: string) => `<span class="Latn" lang="vi"><a href="#">${word}</a></span>`;
+
+  it('gives each term the regions of the qualifiers in its part, before or after it', () => {
+    expect(regionalTerms(item(`${sense('pig')} ${term('lợn')} ${q('northern Vietnam')}; ${term('cúi')} ${q('archaic')}`))).toEqual([
+      { word: 'lợn', regions: ['north'] },
+    ]);
+    const line = `Synonyms: ${q('Northern Vietnam')} ${term('bát')}, ${term('chén')} ${q('Central Vietnam, Southern Vietnam')}`;
+    expect(regionalTerms(item(line))).toEqual([
+      { word: 'bát', regions: ['north'] },
+      { word: 'chén', regions: ['central', 'south'] },
+    ]);
+  });
+
+  it('skips the sense qualifier, and Han spellings', () => {
+    expect(regionalTerms(item(`${sense('Hanoi')} ${term('Thăng Long')} ${q('historical')}`))).toEqual([]);
+    const han = `${term('tàu hoả')} (<span class="Hani" lang="vi">艚火</span>) ${q('northern Vietnam')}`;
+    expect(regionalTerms(item(han))).toEqual([{ word: 'tàu hoả', regions: ['north'] }]);
+  });
+});
+
+describe('equivalentsOf', () => {
+  it('merges a term named twice, and leaves out terms used only where the word is', () => {
+    const terms: Equivalent[] = [
+      { word: 'lợn', regions: ['north'] },
+      { word: 'tàu hỏa', regions: ['north'] },
+      { word: 'tàu hoả', regions: ['central'] },
+      { word: 'heo nái', regions: ['south'] },
+    ];
+    expect(equivalentsOf(terms, ['central', 'south'])).toEqual([
+      { word: 'lợn', regions: ['north'] },
+      { word: 'tàu hỏa', regions: ['north', 'central'] },
+    ]);
   });
 });

@@ -39,6 +39,7 @@ describe('parseWordPage', () => {
           ipaHanoi: '[ɲəp̚˧˨ʔ xəw˧˩]',
           ipaSaigon: '[ɲəp̚˨˩˨ kʰəw˨˩˦]',
           regions: [],
+          equivalents: [],
         },
       ],
     });
@@ -55,6 +56,31 @@ describe('parseWordPage', () => {
   it('finds no regions on the older pages but đồng', () => {
     for (const name of OLDER.filter((n) => n !== 'dong')) {
       for (const entry of parse(name).entries) expect(entry.regions, name).toEqual([]);
+    }
+  });
+
+  it('takes regionally qualified synonyms as equivalents', () => {
+    expect(parse('xe-lua').entries[0]!.equivalents).toEqual([{ word: 'tàu hoả', regions: ['north'] }]);
+    expect(parse('tau-hoa').entries[0]!.equivalents).toEqual([{ word: 'xe lửa', regions: ['south'] }]);
+    expect(parse('heo').entries[0]!.equivalents).toEqual([{ word: 'lợn', regions: ['north'] }]);
+    expect(parse('chen').entries[0]!.equivalents).toEqual([{ word: 'bát', regions: ['north'] }]);
+  });
+
+  it('reads synonyms from column lists too', () => {
+    const wikitext = '==Vietnamese==\n===Noun===\n{{vi-noun}}\n# pig\n====Synonyms====\n{{col|vi|lợn<qq:northern Vietnam>}}\n';
+    const html =
+      '<div class="mw-parser-output"><div class="mw-heading mw-heading2"><h2>Vietnamese</h2></div>' +
+      '<div class="mw-heading mw-heading3"><h3>Noun</h3></div><ol><li>pig</li></ol>' +
+      '<div class="mw-heading mw-heading4"><h4>Synonyms</h4></div>' +
+      '<div class="list-switcher-wrapper"><div class="list-switcher"><div class="term-list"><ul>' +
+      '<li><span class="Latn" lang="vi">lợn</span> <span class="ib-content qualifier-content">northern Vietnam</span></li>' +
+      '</ul></div></div></div></div>';
+    expect(parseWordPage(wikitext, html)!.entries[0]!.equivalents).toEqual([{ word: 'lợn', regions: ['north'] }]);
+  });
+
+  it('finds no equivalents on the older pages', () => {
+    for (const name of OLDER) {
+      for (const entry of parse(name).entries) expect(entry.equivalents, name).toEqual([]);
     }
   });
 
