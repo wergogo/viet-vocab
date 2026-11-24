@@ -45,6 +45,20 @@ export function applyEntry(draft: WordDraft, result: LookupResult, entry: Lookup
   };
 }
 
+/**
+ * The draft without a lookup made for another word (M2 decision 5): its page link and recording go, and its regions
+ * and equivalents go back to what `base`, the draft before that lookup, had. An entry often has neither, so they would
+ * stay with the next word looked up. Its meanings, etymology and IPA stay until the next lookup replaces them.
+ */
+export function withoutLookup(draft: WordDraft, base: WordDraft | null): WordDraft {
+  const next: WordDraft = { ...draft, source: undefined, audioFile: undefined };
+  if (base) {
+    next.regions = [...base.regions];
+    next.equivalents = base.equivalents.map(draftEquivalent);
+  }
+  return next;
+}
+
 /** For a word that isn't on Wiktionary: fills only the IPA, keeping what was typed when the lookup has none. */
 export function applyIpaOnly(draft: WordDraft, result: LookupResult): WordDraft {
   return { ...draft, ipaHanoi: result.ipaHanoi || draft.ipaHanoi, ipaSaigon: result.ipaSaigon || draft.ipaSaigon };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyDraft, type WordDraft } from '../db/words';
-import { applyEntry, applyIpaOnly, lookupStillApplies, sameLookupWord } from './apply';
+import { applyEntry, applyIpaOnly, lookupStillApplies, sameLookupWord, withoutLookup } from './apply';
 import { parseWordPage } from './parseWord';
 import { fixturePage } from './test-fixtures';
 import type { LookupEntry, LookupResult } from './types';
@@ -66,6 +66,12 @@ describe('applyEntry', () => {
       equivalents: [{ word: 'Xe lửa', regions: ['north'] }, { word: 'tàu hoả', regions: ['north'] }],
     };
     expect(applyEntry(emptyDraft('xe lửa'), result, entry).draft.equivalents).toEqual([{ word: 'tàu hoả', regions: ['north'] }]);
+    const train = resultFor('tau-hoa');
+    const spelled: LookupEntry = {
+      ...train.entries[0]!,
+      equivalents: [{ word: 'tàu hỏa', regions: ['north'] }, { word: 'xe lửa', regions: ['south'] }],
+    };
+    expect(applyEntry(emptyDraft('tàu hoả'), train, spelled).draft.equivalents).toEqual([{ word: 'xe lửa', regions: ['south'] }]);
   });
 
   it('keeps one empty meaning row when the entry has none', () => {
@@ -135,6 +141,26 @@ describe('applyEntry with a base (spec §6.5: fill what was found)', () => {
     const applied = applyEntry(typed, result, result.entries[0]!, typed);
     expect(applied.draft.syllables).toEqual(typed.syllables);
     expect(applied.note).toContain('fill in by hand');
+  });
+});
+
+describe('withoutLookup', () => {
+  it('drops the page link and recording, and puts back the regions and equivalents from before the lookup', () => {
+    const first = resultFor('xe-lua');
+    const base = emptyDraft('xe lửa');
+    const filled = applyEntry(base, first, first.entries[0]!, base).draft;
+    expect(filled).toMatchObject({ regions: ['south'], source: { wiktionaryTitle: 'xe lửa' } });
+
+    const retyped = withoutLookup({ ...filled, word: 'nhập khẩu' }, base);
+    expect(retyped).toMatchObject({ word: 'nhập khẩu', regions: [], equivalents: [], source: undefined, audioFile: undefined });
+    // The lookup for the new word starts from that draft, so none of the first word's regions stay.
+    const second = resultFor('nhap-khau');
+    expect(applyEntry(retyped, second, second.entries[0]!, retyped).draft).toMatchObject({ regions: [], equivalents: [] });
+  });
+
+  it('keeps the regions and equivalents when no lookup filled them', () => {
+    const typed: WordDraft = { ...emptyDraft('xe lửa'), regions: ['south'], equivalents: [{ word: 'tàu hoả', regions: ['north'] }] };
+    expect(withoutLookup(typed, null)).toMatchObject({ regions: ['south'], equivalents: [{ word: 'tàu hoả', regions: ['north'] }] });
   });
 });
 

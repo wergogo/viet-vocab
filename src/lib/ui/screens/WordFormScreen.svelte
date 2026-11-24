@@ -4,7 +4,7 @@
   import { findDuplicates } from '../../db/search';
   import { createWord, draftFromWord, emptyDraft, getWord, updateWord, type WordDraft } from '../../db/words';
   import { rebuildSyllables } from '../../text/syllables';
-  import { applyEntry, applyIpaOnly, lookupStillApplies } from '../../wiktionary/apply';
+  import { applyEntry, applyIpaOnly, lookupStillApplies, withoutLookup } from '../../wiktionary/apply';
   import { lookupWord } from '../../wiktionary/lookup';
   import type { LookupResult } from '../../wiktionary/types';
   import { href, navigate } from '../router';
@@ -76,14 +76,13 @@
   // saved, so fixing a typo with backspace keeps them.
   const lookupCurrent = $derived(lookupStillApplies(draft.word, sourceWord, draft.source?.wiktionaryTitle));
 
-  /** Drops a lookup made for another word, with the page link and recording it filled in. */
+  /** Drops a lookup made for another word, with the page link, recording, regions and equivalents it filled in. */
   function forgetLookup() {
+    draft = withoutLookup($state.snapshot(draft), lookupBase);
     lookupBase = null;
     lookupResult = null;
     chosenEntry = 0;
     pairingNote = null;
-    draft.source = undefined;
-    draft.audioFile = undefined;
   }
 
   function onWordInput(event: Event) {
