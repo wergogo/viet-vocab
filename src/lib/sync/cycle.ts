@@ -29,7 +29,11 @@ function readRemote(text: string, config: SyncConfig): VocabFile {
     return parseFile(text);
   } catch (e) {
     if (e instanceof NewerSchemaError) {
-      throw new SyncError('newer-schema', 'The synced data was saved by a newer version of the app. Reload the page to update it.');
+      // A plain reload keeps the old version while it controls the page: the update bar's Reload switches (spec §10).
+      throw new SyncError(
+        'newer-schema',
+        'The synced data was saved by a newer version of the app. Update this one: press Reload on its “A new version is ready” bar, or if there is none, close all of its windows and open it again.',
+      );
     }
     if (e instanceof FileFormatError) {
       throw new SyncError(

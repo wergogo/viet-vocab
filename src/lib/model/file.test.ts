@@ -36,6 +36,13 @@ describe('serializeFile / parseFile', () => {
     const file = parseFile(serializeFile({ words: [], lists: [], cards: [] }, T));
     expect(file.settings).toBeUndefined();
   });
+
+  it('writes format 2 and still reads format-1 files', () => {
+    expect(SCHEMA_VERSION).toBe(2);
+    const v1 = JSON.stringify({ app: 'viet-vocab', schemaVersion: 1, savedAt: T, words: [data.words[0]], lists: [], cards: [] });
+    expect(parseFile(v1).words).toEqual([data.words[0]]);
+    expect(JSON.parse(serializeFile(parseFile(v1), T))).toMatchObject({ schemaVersion: 2, words: [data.words[0]] });
+  });
 });
 
 describe('parseFile errors', () => {
@@ -166,6 +173,29 @@ describe('parseFile field checks', () => {
       addedLater: { x: 1 },
     };
     expect(parseFile(JSON.stringify({ ...base, words: [full] })).words).toEqual([full]);
+  });
+
+  it('accepts regions and equivalents as the app writes them', () => {
+    const regional = {
+      ...valid,
+      regions: ['central', 'south'],
+      equivalents: [{ word: 'lợn', regions: ['north'] }, { word: 'cúi' }],
+    };
+    expect(parseFile(JSON.stringify({ ...base, words: [regional] })).words).toEqual([regional]);
+  });
+
+  it('rejects regions the app would not write', () => {
+    for (const regions of [[], ['south', 'north'], ['north', 'north'], ['west'], 'north', [1]]) {
+      expect(word({ regions })).toThrow('Word #1 (id w) has an invalid regions list.');
+    }
+  });
+
+  it('rejects an invalid equivalents list or equivalent', () => {
+    expect(word({ equivalents: [] })).toThrow('Word #1 (id w) has an invalid equivalents list.');
+    expect(word({ equivalents: { word: 'lợn' } })).toThrow('Word #1 (id w) has an invalid equivalents list.');
+    for (const bad of [null, { word: '' }, { word: 'lợn', regions: [] }, { word: 'lợn', regions: ['south', 'north'] }]) {
+      expect(word({ equivalents: [{ word: 'bát' }, bad] })).toThrow('Word #1 (id w) has an invalid equivalent #2.');
+    }
   });
 
   it('rejects a null meaning', () => {

@@ -1,14 +1,15 @@
 import { cardId } from './ids';
 import { isNewCardsPerDay } from './settings';
-import { SETTING_NAMES, tombstone, type List, type Rec, type ReviewCard, type Settings, type Word } from './types';
+import { SETTING_NAMES, sortRegions, tombstone, type List, type Rec, type ReviewCard, type Settings, type Word } from './types';
 
 export const APP_ID = 'viet-vocab';
 
 /**
  * The file format's version. A new synced field or collection always comes with a bump (M4 decision 14): a device
  * still on an older version then stops and asks to be updated, instead of rewriting records without the new field.
+ * Version 2 (M6) adds the words' `regions` and `equivalents`. Files of version 1 still load.
  */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export interface VocabData {
   words: Rec<Word>[];
@@ -74,6 +75,12 @@ const isSyllable = (s: unknown): boolean =>
 const isSense = (s: unknown): boolean => isObject(s) && isString(s.pos) && isString(s.meaning);
 const isSource = (s: unknown): boolean => isObject(s) && isString(s.wiktionaryTitle) && isCanonicalIso(s.fetchedAt);
 
+/** Regions as the app stores them (spec §4.2): one or more, each once, in the order north, central, south. */
+const isRegionList = (v: unknown): boolean =>
+  Array.isArray(v) && v.length > 0 && v.every(isString) && sortRegions(v).join() === v.join();
+const isEquivalent = (e: unknown): boolean =>
+  isObject(e) && isNonEmptyString(e.word) && (e.regions === undefined || isRegionList(e.regions));
+
 /**
  * The `source` of a word filled from Wiktionary. Every record the app writes must pass parseFile, or the sync file would
  * stop loading on every device, so a fetch time that isn't canonical is rewritten as one, or replaced by `now`.
@@ -100,6 +107,12 @@ function wordProblem(r: Fields): string | null {
   if (listId) return `has an invalid list id #${listId}`;
   const field = OPTIONAL_WORD_TEXT.find((f) => !isOptionalString(r[f]));
   if (field) return `has an invalid ${field}`;
+  if (r.regions !== undefined && !isRegionList(r.regions)) return 'has an invalid regions list';
+  if (r.equivalents !== undefined) {
+    if (!Array.isArray(r.equivalents) || r.equivalents.length === 0) return 'has an invalid equivalents list';
+    const equivalent = firstInvalid(r.equivalents, isEquivalent);
+    if (equivalent) return `has an invalid equivalent #${equivalent}`;
+  }
   if (r.source !== undefined && !isSource(r.source)) return 'has an invalid source';
   return null;
 }
@@ -210,7 +223,7 @@ export function parseFile(text: string): VocabFile {
   }
   if (version > SCHEMA_VERSION) {
     throw new NewerSchemaError(
-      `This data was saved by a newer version of the app (format ${version}). Update the app by reloading the page, then try again.`,
+      `This data was saved by a newer version of the app (format ${version}). Update this one first: press Reload on its “A new version is ready” bar, or if there is none, close all of its windows and open it again.`,
     );
   }
   if (!isString(file.savedAt)) throw new FileFormatError('The file has no savedAt time.');
