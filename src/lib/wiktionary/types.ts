@@ -1,4 +1,4 @@
-import type { Sense } from '../model/types';
+import type { Region, Sense } from '../model/types';
 import type { EntryChars } from './characters';
 
 /** One etymology of a Wiktionary page, ready to fill the add form. */
@@ -11,6 +11,8 @@ export interface LookupEntry {
   etymology: string;
   ipaHanoi: string;
   ipaSaigon: string;
+  /** Where the word is used, from the regional labels of its meanings; empty when none has one. */
+  regions: Region[];
   /** Wikimedia Commons file name of a recording. */
   audioFile?: string;
 }

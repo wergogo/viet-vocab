@@ -41,8 +41,8 @@ describe('CACHE_VERSION', () => {
   // fixture changes the digest too; then only the digest needs updating.
   it('changes whenever parsing changes what a lookup returns', () => {
     expect({ CACHE_VERSION, parsed: digest(JSON.stringify(parsedFixtures())) }).toEqual({
-      CACHE_VERSION: 1,
-      parsed: '7babda26',
+      CACHE_VERSION: 2,
+      parsed: 'd6400403',
     });
   });
 });

@@ -1,5 +1,7 @@
+import type { Region } from '../model/types';
 import { ipaFromItems, type Ipa } from './ipa';
 import { parseHtml } from './parse';
+import { labelRegions } from './regions';
 import { NUMBERED_ETYMOLOGY, POS_HEADINGS } from './wikitext';
 
 // Rendered Wiktionary HTML is only read, with DOMParser (through parseHtml), and none of it is ever inserted into the
@@ -73,6 +75,8 @@ export function definitionsOf(list: Element): string[] {
 export interface HtmlPos {
   name: string;
   definitions: string[];
+  /** The regions that the labels in front of its meanings name (spec §6.2). */
+  regions: Region[];
 }
 
 export interface HtmlEntry {
@@ -120,7 +124,7 @@ export function splitHtmlEntries(elements: readonly Element[]): HtmlSection {
       } else if (PRONUNCIATION.test(h.text)) {
         mode = 'pronunciation';
       } else if (POS_HEADINGS.has(h.text) && entry) {
-        pos = { name: h.text, definitions: [] };
+        pos = { name: h.text, definitions: [], regions: [] };
         entry.pos.push(pos);
         mode = 'pos';
       } else {
@@ -135,6 +139,7 @@ export function splitHtmlEntries(elements: readonly Element[]): HtmlSection {
       (entry ? items.get(entry)! : sharedItems).push(...Array.from(el.querySelectorAll('li')));
     } else if (mode === 'pos' && pos && pos.definitions.length === 0 && el.tagName === 'OL') {
       pos.definitions = definitionsOf(el);
+      pos.regions = labelRegions(el);
     }
   }
   for (const e of entries) e.ipa = ipaFromItems(items.get(e) ?? []);

@@ -1,4 +1,4 @@
-import type { Sense } from '../model/types';
+import { sortRegions, type Region, type Sense } from '../model/types';
 import { charactersFromEntry } from './characters';
 import { splitHtmlEntries, vietnameseElements } from './html';
 import { wikiToText } from './templates';
@@ -42,9 +42,11 @@ export function parseWordPage(wikitext: string, html: string): ParsedWordPage | 
     const ipa = he && (he.ipa.hanoi || he.ipa.saigon) ? he.ipa : rendered.sharedIpa;
     const senses: Sense[] = [];
     const posNames: string[] = [];
+    const regions: Region[] = [];
     (he?.pos ?? []).forEach((hp, j) => {
       if (!COUNTED_POS.has(hp.name)) return;
       posNames.push(hp.name);
+      regions.push(...hp.regions);
       const wp = we.pos[j];
       const cls = wp?.name === hp.name ? wp.headword?.named.cls : undefined;
       const pos = cls ? `${hp.name} (classifier: ${wikiToText(cls)})` : hp.name;
@@ -57,6 +59,7 @@ export function parseWordPage(wikitext: string, html: string): ParsedWordPage | 
       etymology: he?.etymology ?? '',
       ipaHanoi: ipa.hanoi,
       ipaSaigon: ipa.saigon,
+      regions: sortRegions(regions),
     };
     const audio = audioFileIn(we.text) ?? sharedAudio;
     if (audio) entry.audioFile = audio;

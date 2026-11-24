@@ -25,7 +25,7 @@ describe('splitHtmlEntries', () => {
     expect(entries[0]!.etymology).toBe(
       'Sino-Vietnamese word from 入口, Chinese 入口 (rùkǒu), orthographic borrowing from Japanese 入口 (iriguchi, “entrance”).',
     );
-    expect(entries[0]!.pos).toEqual([{ name: 'Verb', definitions: ['to import'] }]);
+    expect(entries[0]!.pos).toEqual([{ name: 'Verb', definitions: ['to import'], regions: [] }]);
   });
 
   it('drops examples and keeps labels and glosses in definitions', () => {
@@ -97,7 +97,7 @@ describe('HTML shapes', () => {
     const html =
       '<section><div class="mw-heading mw-heading2"><h2 id="Vietnamese">Vietnamese</h2></div>' +
       '<section><div class="mw-heading mw-heading3"><h3 id="Noun">Noun</h3></div><ol><li>water</li></ol></section></section>';
-    expect(splitHtmlEntries(vietnameseElements(html)!).entries[0]!.pos).toEqual([{ name: 'Noun', definitions: ['water'] }]);
+    expect(splitHtmlEntries(vietnameseElements(html)!).entries[0]!.pos).toEqual([{ name: 'Noun', definitions: ['water'], regions: [] }]);
   });
 
   it('accepts numbered pronunciation headings', () => {

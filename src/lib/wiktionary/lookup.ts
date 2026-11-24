@@ -16,7 +16,7 @@ export interface LookupOptions {
 }
 
 /** Bump when parsing changes what a lookup returns (M2 decision 13); cache-version.test.ts notices when it must. */
-export const CACHE_VERSION = 1;
+export const CACHE_VERSION = 2;
 const wordCacheKey = (spelling: string) => `w${CACHE_VERSION}:${spelling}`;
 const charCacheKey = (char: string) => `c${CACHE_VERSION}:${char}`;
 

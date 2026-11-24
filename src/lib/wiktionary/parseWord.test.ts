@@ -7,6 +7,24 @@ const parse = (name: string) => {
   return parseWordPage(page.wikitext, page.html)!;
 };
 
+/** The pages saved before M6. Only đồng has a regional label, and none has a regional synonym. */
+const OLDER = [
+  'bac-si',
+  'dien-thoai',
+  'dong',
+  'ha-noi',
+  'hanh-phuc',
+  'hoc-sinh',
+  'kinh-te',
+  'nhap',
+  'nhap-khau',
+  'nuoc',
+  'quoc-gia',
+  'thanh-pho',
+  'tieng-viet',
+  'van-hoa',
+];
+
 describe('parseWordPage', () => {
   it('parses a single-entry page', () => {
     expect(parse('nhap-khau')).toEqual({
@@ -20,9 +38,30 @@ describe('parseWordPage', () => {
             'Sino-Vietnamese word from 入口, Chinese 入口 (rùkǒu), orthographic borrowing from Japanese 入口 (iriguchi, “entrance”).',
           ipaHanoi: '[ɲəp̚˧˨ʔ xəw˧˩]',
           ipaSaigon: '[ɲəp̚˨˩˨ kʰəw˨˩˦]',
+          regions: [],
         },
       ],
     });
+  });
+
+  it('gives an entry the regions its meanings are labelled with, across parts of speech', () => {
+    expect(parse('xe-lua').entries[0]!.regions).toEqual(['south']);
+    expect(parse('tau-hoa').entries[0]!.regions).toEqual(['north']);
+    expect(parse('heo').entries[0]!.regions).toEqual(['central', 'south']);
+    expect(parse('chen').entries[0]!.regions).toEqual(['central', 'south']);
+    expect(parse('dong').entries.map((e) => e.regions)).toEqual([[], [], ['south']]);
+  });
+
+  it('finds no regions on the older pages but đồng', () => {
+    for (const name of OLDER.filter((n) => n !== 'dong')) {
+      for (const entry of parse(name).entries) expect(entry.regions, name).toEqual([]);
+    }
+  });
+
+  it('keeps the label in the meaning it belongs to', () => {
+    const meanings = parse('chen').entries[0]!.senses.map((s) => s.meaning);
+    expect(meanings[0]).toMatch(/^small handleless porcelain cup/);
+    expect(meanings[1]).toBe('(Central Vietnam, Southern Vietnam) rice bowl (small bowl from which rice is typically eaten)');
   });
 
   it('keeps every part of speech and the first audio file', () => {
