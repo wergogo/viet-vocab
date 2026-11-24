@@ -1,6 +1,6 @@
 # Wiktionary test fixtures
 
-Raw responses from the English Wiktionary action API, fetched on 2026-11-21 with [`scripts/fetch-wiktionary-fixtures.mjs`](../../../scripts/fetch-wiktionary-fixtures.mjs). The script makes the same requests the app makes (`format=json&formatversion=2&origin=*`, header `Api-User-Agent: VietVocab/1.0`), so the parser tests run against real markup.
+Raw responses from the English Wiktionary action API, fetched on 2026-11-21 (the four regional words on 2026-11-23) with [`scripts/fetch-wiktionary-fixtures.mjs`](../../../scripts/fetch-wiktionary-fixtures.mjs). The script makes the same requests the app makes (`format=json&formatversion=2&origin=*`, header `Api-User-Agent: VietVocab/1.0`), so the parser tests run against real markup.
 
 The content comes from Wiktionary and is licensed [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Authors are listed in each page's history on en.wiktionary.org.
 
@@ -21,6 +21,10 @@ The content comes from Wiktionary and is licensed [CC BY-SA 4.0](https://creativ
 | `ha-noi.json` | parse `Hà Nội` | a proper noun, for lookups typed in lowercase |
 | `van-hoa-stub.json` | parse `văn hóa` | alternative-spelling stub |
 | `van-hoa.json` | parse `văn hoá` | the stub's main entry |
+| `xe-lua.json` | parse `xe lửa` | a Southern word, with its Northern synonym under Synonyms |
+| `tau-hoa.json` | parse `tàu hoả` | a Northern word, with its Southern synonym under Synonyms |
+| `heo.json` | parse `heo` | Central and Southern across two nouns; synonyms joined by ";", one regional |
+| `chen.json` | parse `chén` | a regional meaning beside a general one; a synonym line under it |
 | `missing-page.json` | parse `xyzkhongcotu` | `missingtitle` error |
 | `query-variants.json` | query titles `xyzkhongcotu\|văn hoá` | which spelling exists |
 | `char-nhap.json` | parse `入` (wikitext only) | character readings, meanings, compounds |
