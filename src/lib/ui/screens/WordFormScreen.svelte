@@ -10,8 +10,10 @@
   import { href, navigate } from '../router';
   import { liveWords } from '../stores';
   import AudioButton from '../components/AudioButton.svelte';
+  import EquivalentsEditor from '../components/EquivalentsEditor.svelte';
   import ListPicker from '../components/ListPicker.svelte';
   import LookupPanel from '../components/LookupPanel.svelte';
+  import RegionToggles from '../components/RegionToggles.svelte';
   import SensesEditor from '../components/SensesEditor.svelte';
   import SyllableEditor from '../components/SyllableEditor.svelte';
 
@@ -252,6 +254,14 @@
       <textarea bind:value={draft.notes}></textarea>
     </label>
 
+    <fieldset>
+      <legend>Regions</legend>
+      <RegionToggles bind:selected={draft.regions} />
+      <p class="muted hint">Where the word is used. Leave all off for a word used everywhere.</p>
+    </fieldset>
+
+    <EquivalentsEditor bind:equivalents={draft.equivalents} />
+
     <ListPicker bind:selected={draft.listIds} />
 
     {#if error}<p class="notice" role="alert">{error}</p>{/if}
@@ -269,4 +279,5 @@
   .recording { flex-wrap: wrap; }
   .file { flex: 1 1 160px; font-size: 14px; overflow-wrap: anywhere; }
   .actions { justify-content: space-between; }
+  .hint { margin: 0; font-size: 14px; }
 </style>
