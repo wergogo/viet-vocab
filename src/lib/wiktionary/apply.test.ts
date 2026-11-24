@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { emptyDraft } from '../db/words';
+import { emptyDraft, type WordDraft } from '../db/words';
 import { applyEntry, applyIpaOnly, lookupStillApplies, sameLookupWord } from './apply';
 import { parseWordPage } from './parseWord';
 import { fixturePage } from './test-fixtures';
-import type { LookupResult } from './types';
+import type { LookupEntry, LookupResult } from './types';
 
 const FETCHED = '2026-11-21T10:00:00.000Z';
 
@@ -52,6 +52,22 @@ describe('applyEntry', () => {
     expect(applied.draft.syllables.every((s) => !s.char)).toBe(true);
   });
 
+  it('fills the regions and equivalents', () => {
+    const result = resultFor('xe-lua');
+    const { draft } = applyEntry(emptyDraft('xe lửa'), result, result.entries[0]!);
+    expect(draft.regions).toEqual(['south']);
+    expect(draft.equivalents).toEqual([{ word: 'tàu hoả', regions: ['north'] }]);
+  });
+
+  it('never makes the word its own equivalent', () => {
+    const result = resultFor('xe-lua');
+    const entry: LookupEntry = {
+      ...result.entries[0]!,
+      equivalents: [{ word: 'Xe lửa', regions: ['north'] }, { word: 'tàu hoả', regions: ['north'] }],
+    };
+    expect(applyEntry(emptyDraft('xe lửa'), result, entry).draft.equivalents).toEqual([{ word: 'tàu hoả', regions: ['north'] }]);
+  });
+
   it('keeps one empty meaning row when the entry has none', () => {
     const result = resultFor('nhap-khau');
     const entry = { ...result.entries[0]!, senses: [] };
@@ -76,6 +92,22 @@ describe('applyEntry with a base (spec §6.5: fill what was found)', () => {
     expect(draft).toMatchObject({ etymology: 'mine', ipaHanoi: '[h]', ipaSaigon: '[s]', audioFile: 'x.ogg' });
     expect(draft.senses).toEqual([{ pos: 'Verb', meaning: 'typed' }]);
     expect(draft.syllables).toEqual(typed.syllables);
+  });
+
+  it('keeps typed regions and equivalents when the entry has none', () => {
+    const result = resultFor('nhap-khau');
+    const typed: WordDraft = { ...emptyDraft('nhập khẩu'), regions: ['north'], equivalents: [{ word: 'nhập cảng', regions: ['south'] }] };
+    const { draft } = applyEntry(typed, result, result.entries[0]!, typed);
+    expect(draft.regions).toEqual(['north']);
+    expect(draft.equivalents).toEqual([{ word: 'nhập cảng', regions: ['south'] }]);
+  });
+
+  it('drops the regions of an etymology when switching to one without', () => {
+    const result = resultFor('dong');
+    const base = emptyDraft('đồng');
+    const third = applyEntry(base, result, result.entries[2]!, base).draft;
+    expect(third.regions).toEqual(['south']);
+    expect(applyEntry(third, result, result.entries[0]!, base).draft.regions).toEqual([]);
   });
 
   it("switches etymologies from one base, so one entry's values never stay in another", () => {

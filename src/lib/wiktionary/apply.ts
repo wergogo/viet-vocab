@@ -1,4 +1,4 @@
-import type { WordDraft } from '../db/words';
+import { draftEquivalent, type WordDraft } from '../db/words';
 import { wordSource } from '../model/file';
 import { rebuildSyllables } from '../text/syllables';
 import { wordKey } from '../text/tone';
@@ -12,9 +12,9 @@ export interface AppliedEntry {
 }
 
 /**
- * Fills the fields a lookup owns from one entry: characters and glosses, meanings, etymology, IPA, audio and
- * source. A field the entry has no value for keeps the value in `base` (spec §6.5: a partial parse fills what it
- * found), so what the user typed survives. The form passes the draft as it was before the lookup as `base`, so
+ * Fills the fields a lookup owns from one entry: characters and glosses, meanings, etymology, IPA, regions,
+ * equivalents, audio and source. A field the entry has no value for keeps the value in `base` (spec §6.5: a partial
+ * parse fills what it found), so what the user typed survives. The form passes the draft as it was before the lookup as `base`, so
  * switching etymologies never leaves one entry's values in another. The word, notes and lists always come from
  * `draft`. Nothing is saved until Save (spec §5.2).
  */
@@ -26,6 +26,8 @@ export function applyEntry(draft: WordDraft, result: LookupResult, entry: Lookup
   const syllables = paired
     ? pairing.syllables.map((s, i) => (s.gloss || !typed[i]?.gloss ? s : { ...s, gloss: typed[i]!.gloss }))
     : typed;
+  // A word is never its own equivalent (spec §6.2), even when the page spells it with other tone marks or case.
+  const equivalents = entry.equivalents.filter((e) => !sameLookupWord(e.word, draft.word));
   return {
     draft: {
       ...draft,
@@ -34,6 +36,8 @@ export function applyEntry(draft: WordDraft, result: LookupResult, entry: Lookup
       ipaHanoi: entry.ipaHanoi || base.ipaHanoi,
       ipaSaigon: entry.ipaSaigon || base.ipaSaigon,
       etymology: entry.etymology || base.etymology,
+      regions: [...(entry.regions.length > 0 ? entry.regions : base.regions)],
+      equivalents: equivalents.length > 0 ? equivalents.map(draftEquivalent) : base.equivalents.map(draftEquivalent),
       audioFile: entry.audioFile ?? base.audioFile,
       source: result.title ? wordSource(result.title, result.fetchedAt) : base.source,
     },
