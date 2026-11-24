@@ -17,6 +17,8 @@ describe('regionsIn', () => {
       ['Huế dialect', ['central']],
       ['Nghệ An', ['central']],
       ['(Northern)', ['north']],
+      ['(Northwestern)', ['north']],
+      ['southeast', ['south']],
     ];
     for (const [text, regions] of cases) expect(regionsIn(text), text).toEqual(regions);
   });

@@ -47,7 +47,7 @@ const PLACE_PATTERNS = PLACES.map(([region, names]) => [region, names.map(whole)
 const VIETNAM = whole('vietnam(?:ese)?');
 /** "North Central Vietnam" and "South Central Vietnam" are Central, and not Northern or Southern as well. */
 const CENTRAL_PART = /(?:north|south)(?:ern)?[\s-]+central/g;
-const DIRECTION_ONLY = /^(?:north|northern|central|south|southern)$/;
+const COMPASS_WORDS = new Set(DIRECTIONS.flatMap(([, names]) => names));
 
 /** The regions one label or qualifier names, ignoring case: "Central and Southern Vietnam" names two, "archaic" none. */
 export function regionsIn(text: string): Region[] {
@@ -56,7 +56,7 @@ export function regionsIn(text: string): Region[] {
     .toLowerCase()
     .replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '');
   const found = PLACE_PATTERNS.filter(([, patterns]) => patterns.some((p) => p.test(t))).map(([region]) => region);
-  if (VIETNAM.test(t) || DIRECTION_ONLY.test(t)) {
+  if (VIETNAM.test(t) || COMPASS_WORDS.has(t)) {
     const words = t.replace(CENTRAL_PART, 'central').split(/[^\p{L}]+/u);
     for (const [region, names] of DIRECTIONS) if (names.some((n) => words.includes(n))) found.push(region);
   }
